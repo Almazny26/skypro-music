@@ -1,6 +1,6 @@
 .wrapper {
   width: 100%;
-  min-height: 100%;
+  height: 100vh;
   overflow: hidden;
   background-color: #383838;
 }
@@ -11,19 +11,25 @@
   margin: 0 auto;
   position: relative;
   background-color: #181818;
+  display: flex;
+  flex-direction: column;
 }
 
 .main {
   flex: 1 1 auto;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: space-between;
+  overflow: hidden;
+  min-height: 0; /* Важно для работы overflow */
 }
 
 .centerblock {
   width: auto;
   flex-grow: 3;
-  padding: 20px 40px 20px 111px;
+  padding: 20px 40px 100px 111px; /* Увеличен нижний отступ для плеера */
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .h2 {

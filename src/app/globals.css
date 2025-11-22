@@ -37,3 +37,21 @@ a {
 ul {
   list-style: none;
 }
+
+/* Скрываем полосу прокрутки, но сохраняем возможность скролла */
+/* Для WebKit браузеров (Chrome, Safari, Edge) */
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  background: transparent;
+}
+
+/* Для Firefox */
+* {
+  scrollbar-width: none;
+}
+
+/* Для старых версий IE и Edge */
+* {
+  -ms-overflow-style: none;
+}

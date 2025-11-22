@@ -1,5 +1,13 @@
 import styles from './Playlist.module.css';
 import Track from './Track';
+import { data } from '../../data';
+
+// Функция для преобразования секунд в формат MM:SS
+function formatDuration(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+}
 
 // Компонент списка треков (плейлиста)
 // Содержит заголовки колонок и список компонентов Track
@@ -20,14 +28,17 @@ export default function Playlist() {
       </div>
       
       {/* Список треков - каждый трек это отдельный компонент Track */}
-      {/* Пока данные захардкожены, позже будут приходить из API или state */}
+      {/* Данные получаются из моковых данных data.ts */}
       <div className={styles.playlist}>
-        <Track name="Guilt" author="Nero" album="Welcome Reality" duration="4:44" />
-        <Track name="Elektro" author="Dynoro, Outwork, Mr. Gee" album="Elektro" duration="2:22" />
-        <Track name="I'm Fire" author="Ali Bakgor" album="I'm Fire" duration="2:22" />
-        {/* Пример трека с дополнительной информацией (subtitle) */}
-        <Track name="Non Stop" author="Стоункат, Psychopath" album="Non Stop" duration="4:12" subtitle="(Remix)" />
-        <Track name="Run Run" author="Jaded, Will Clarke, AR/CO" album="Run Run" duration="2:54" subtitle="(feat. AR/CO)" />
+        {data.map((track) => (
+          <Track
+            key={track._id}
+            name={track.name}
+            author={track.author}
+            album={track.album}
+            duration={formatDuration(track.duration_in_seconds)}
+          />
+        ))}
       </div>
     </div>
   );
