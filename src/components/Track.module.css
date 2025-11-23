@@ -101,6 +101,11 @@
   transition: fill 0.2s ease, stroke 0.2s ease;
 }
 
+.timeSvg:hover {
+  fill: transparent;
+  stroke: #acacac;
+}
+
 .timeSvgLiked {
   fill: #b672ff;
   stroke: #b672ff;

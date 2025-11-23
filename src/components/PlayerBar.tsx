@@ -173,7 +173,7 @@ export default function PlayerBar({ isLiked, isShuffled, onPlayPause, onNextTrac
               
               {/* Кнопка "Play/Pause" - основная кнопка управления */}
               <div 
-                className={`${styles.btnPlay} ${styles.btn}`}
+                className={`${styles.btnPlay} ${styles.btn} ${styles.btnIcon} ${isPlaying ? styles.active : ''}`}
                 onClick={currentTrack ? onPlayPause : undefined}
                 style={{ cursor: currentTrack ? 'pointer' : 'default', opacity: currentTrack ? 1 : 0.5 }}
               >
@@ -195,22 +195,22 @@ export default function PlayerBar({ isLiked, isShuffled, onPlayPause, onNextTrac
               
               {/* Кнопка "Повтор" */}
               <div 
-                className={`${styles.btnRepeat} ${styles.btnIcon} ${styles.btn}`}
+                className={`${styles.btnRepeat} ${styles.btnIcon} ${styles.btn} ${isLooping ? styles.active : ''}`}
                 onClick={handleToggleLoop}
                 style={{ cursor: 'pointer' }}
               >
-                <svg className={styles.btnRepeatSvg} style={{ stroke: isLooping ? '#ffffff' : '#696969' }}>
+                <svg className={styles.btnRepeatSvg}>
                   <use href="/img/icon/sprite.svg#icon-repeat"></use>
                 </svg>
               </div>
               
               {/* Кнопка "Перемешать" */}
               <div 
-                className={`${styles.btnShuffle} ${styles.btnIcon} ${styles.btn}`}
+                className={`${styles.btnShuffle} ${styles.btnIcon} ${styles.btn} ${isShuffled ? styles.active : ''}`}
                 onClick={onToggleShuffle}
                 style={{ cursor: 'pointer' }}
               >
-                <svg className={styles.btnShuffleSvg} style={{ stroke: isShuffled ? '#ffffff' : '#696969' }}>
+                <svg className={styles.btnShuffleSvg}>
                   <use href="/img/icon/sprite.svg#icon-shuffle"></use>
                 </svg>
               </div>

@@ -79,6 +79,7 @@
   width: 22px;
   height: 20px;
   fill: #d9d9d9;
+  transition: fill 0.2s ease;
 }
 
 .btnNext {
@@ -102,7 +103,7 @@
   height: 12px;
   fill: transparent;
   stroke: #696969;
-  transition: stroke 0.2s;
+  transition: fill 0.2s ease, stroke 0.2s ease;
 }
 
 .btnShuffle {
@@ -115,7 +116,7 @@
   height: 12px;
   fill: transparent;
   stroke: #696969;
-  transition: stroke 0.2s;
+  transition: fill 0.2s ease, stroke 0.2s ease;
 }
 
 .trackPlay {
@@ -278,15 +279,41 @@
   cursor: pointer;
 }
 
-.btnIcon:active svg {
+.btnIcon:hover .btnPlaySvg {
+  fill: #acacac;
+}
+
+.btnIcon:hover .btnRepeatSvg,
+.btnIcon:hover .btnShuffleSvg {
   fill: transparent;
+  stroke: #acacac;
+}
+
+.btnIcon:active svg,
+.btnIcon.active svg {
+  fill: #ffffff;
   stroke: #ffffff;
   cursor: pointer;
 }
 
+.btnIcon:active .btnPlaySvg,
+.btnIcon.active .btnPlaySvg {
+  fill: #ffffff;
+}
+
+.btnIcon:active .btnRepeatSvg,
+.btnIcon.active .btnRepeatSvg,
+.btnIcon:active .btnShuffleSvg,
+.btnIcon.active .btnShuffleSvg {
+  fill: #ffffff;
+  stroke: #ffffff;
+}
+
 .btnIcon:active .likeSvg,
-.btnIcon:active .dislikeSvg {
-  fill: #696969;
+.btnIcon.active .likeSvg,
+.btnIcon:active .dislikeSvg,
+.btnIcon.active .dislikeSvg {
+  fill: #ffffff;
   stroke: #ffffff;
   cursor: pointer;
 }

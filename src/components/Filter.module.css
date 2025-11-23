@@ -32,17 +32,21 @@
   padding: 6px 20px;
   cursor: pointer;
   position: relative;
-  transition: border-color 0.3s ease, color 0.3s ease;
+  background-color: transparent;
+  color: #ffffff;
+  transition: border-color 0.3s ease, color 0.3s ease, background-color 0.3s ease;
 }
 
 .filter__button:hover {
   border-color: #d9b6ff;
   color: #d9b6ff;
+  background-color: transparent;
 }
 
 .active {
   border-color: #ad61ff;
-  color: #ad61ff;
+  background-color: #ad61ff;
+  color: #ffffff;
 }
 
 .dropdown {
