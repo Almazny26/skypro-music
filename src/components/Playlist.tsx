@@ -21,12 +21,13 @@ interface PlaylistProps {
     track_file: string;
   }>;
   currentTrackId: number | null;
+  isPlaying: boolean;
   onTrackSelect: (track: PlaylistProps['tracks'][0]) => void;
 }
 
 // Компонент списка треков (плейлиста)
 // Содержит заголовки колонок и список компонентов Track
-export default function Playlist({ tracks, currentTrackId, onTrackSelect }: PlaylistProps) {
+export default function Playlist({ tracks, currentTrackId, isPlaying, onTrackSelect }: PlaylistProps) {
   return (
     <div className={styles.content}>
       {/* Заголовки колонок таблицы треков */}
@@ -50,6 +51,7 @@ export default function Playlist({ tracks, currentTrackId, onTrackSelect }: Play
             track={track}
             duration={formatDuration(track.duration_in_seconds)}
             isActive={currentTrackId === track._id}
+            isPlaying={currentTrackId === track._id && isPlaying}
             onSelect={onTrackSelect}
           />
         ))}

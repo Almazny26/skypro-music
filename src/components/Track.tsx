@@ -17,6 +17,7 @@ interface TrackProps {
   duration: string; // Длительность трека (например, "4:44")
   subtitle?: string; // Дополнительная информация (опционально, например "(Remix)")
   isActive?: boolean; // Флаг активного трека
+  isPlaying?: boolean; // Флаг воспроизведения трека
   onSelect: (track: TrackProps['track']) => void; // Обработчик выбора трека
 }
 
@@ -27,6 +28,7 @@ export default function Track({
   duration,
   subtitle,
   isActive = false,
+  isPlaying = false,
   onSelect,
 }: TrackProps) {
   const handleClick = () => {
@@ -43,10 +45,14 @@ export default function Track({
         {/* Блок с названием трека и иконкой */}
         <div className={styles.title}>
           <div className={styles.titleImage}>
-            {/* Иконка ноты из SVG спрайта */}
-            <svg className={styles.titleSvg}>
-              <use href="/img/icon/sprite.svg#icon-note"></use>
-            </svg>
+            {/* Если трек активен, показываем фиолетовую точку, иначе иконку ноты */}
+            {isActive ? (
+              <span className={`${styles.playingDot} ${isPlaying ? styles.playingDotAnimated : ''}`}></span>
+            ) : (
+              <svg className={styles.titleSvg}>
+                <use href="/img/icon/sprite.svg#icon-note"></use>
+              </svg>
+            )}
           </div>
           <div className={styles.titleText}>
             <Link className={styles.titleLink} href="" onClick={(e) => e.preventDefault()}>

@@ -132,6 +132,7 @@ export default function Home() {
             <Playlist 
               tracks={data}
               currentTrackId={currentTrack?._id || null}
+              isPlaying={isPlaying}
               onTrackSelect={handleTrackSelect}
             />
           </div>
