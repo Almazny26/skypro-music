@@ -15,15 +15,17 @@ interface PlayerBarProps {
     duration_in_seconds?: number;
   } | null;
   isPlaying: boolean;
+  isLiked: boolean;
   onPlayPause: () => void;
   onNextTrack: () => void;
   onPrevTrack: () => void;
   isShuffled: boolean;
   onToggleShuffle: () => void;
+  onToggleLike: () => void;
 }
 
 // Компонент плеера - фиксированная панель внизу страницы
-export default function PlayerBar({ currentTrack, isPlaying, onPlayPause, onNextTrack, onPrevTrack, isShuffled, onToggleShuffle }: PlayerBarProps) {
+export default function PlayerBar({ currentTrack, isPlaying, isLiked, onPlayPause, onNextTrack, onPrevTrack, isShuffled, onToggleShuffle, onToggleLike }: PlayerBarProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -247,8 +249,12 @@ export default function PlayerBar({ currentTrack, isPlaying, onPlayPause, onNext
 
               {/* Кнопки лайка и дизлайка */}
               <div className={styles.dislike}>
-                <div className={`${styles.btnShuffle} ${styles.btnIcon}`}>
-                  <svg className={styles.likeSvg}>
+                <div 
+                  className={`${styles.btnShuffle} ${styles.btnIcon} ${styles.btn}`}
+                  onClick={onToggleLike}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <svg className={`${styles.likeSvg} ${isLiked ? styles.likeSvgLiked : ''}`}>
                     <use href="/img/icon/sprite.svg#icon-like"></use>
                   </svg>
                 </div>

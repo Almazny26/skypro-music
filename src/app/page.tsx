@@ -19,6 +19,7 @@ export default function Home() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isShuffled, setIsShuffled] = useState(false);
   const [playedTracks, setPlayedTracks] = useState<number[]>([]); // Для отслеживания воспроизведенных треков в режиме shuffle
+  const [likedTracks, setLikedTracks] = useState<number[]>([]); // Список ID лайкнутых треков
 
   const handleTrackSelect = (track: typeof data[0]) => {
     if (currentTrack?._id === track._id) {
@@ -117,6 +118,18 @@ export default function Home() {
     }
   };
 
+  const handleToggleLike = (trackId: number) => {
+    setLikedTracks(prev => {
+      if (prev.includes(trackId)) {
+        // Убираем лайк
+        return prev.filter(id => id !== trackId);
+      } else {
+        // Добавляем лайк
+        return [...prev, trackId];
+      }
+    });
+  };
+
   return (
     <div className={styles.wrapper}>
       <div className={styles.container}>
@@ -133,7 +146,9 @@ export default function Home() {
               tracks={data}
               currentTrackId={currentTrack?._id || null}
               isPlaying={isPlaying}
+              likedTracks={likedTracks}
               onTrackSelect={handleTrackSelect}
+              onToggleLike={handleToggleLike}
             />
           </div>
           
@@ -145,11 +160,13 @@ export default function Home() {
         <PlayerBar 
           currentTrack={currentTrack}
           isPlaying={isPlaying}
+          isLiked={currentTrack ? likedTracks.includes(currentTrack._id) : false}
           onPlayPause={handlePlayPause}
           onNextTrack={handleNextTrack}
           onPrevTrack={handlePrevTrack}
           isShuffled={isShuffled}
           onToggleShuffle={handleToggleShuffle}
+          onToggleLike={currentTrack ? () => handleToggleLike(currentTrack._id) : () => {}}
         />
         <footer className={styles.footer}></footer>
       </div>

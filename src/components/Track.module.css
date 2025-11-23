@@ -98,6 +98,12 @@
   margin-right: 17px;
   fill: transparent;
   stroke: #696969;
+  transition: fill 0.2s ease, stroke 0.2s ease;
+}
+
+.timeSvgLiked {
+  fill: #b672ff;
+  stroke: #b672ff;
 }
 
 .timeText {

@@ -201,6 +201,12 @@
   height: 12px;
   fill: transparent;
   stroke: #696969;
+  transition: fill 0.2s ease, stroke 0.2s ease;
+}
+
+.likeSvgLiked {
+  fill: #b672ff;
+  stroke: #b672ff;
 }
 
 .dislikeSvg {

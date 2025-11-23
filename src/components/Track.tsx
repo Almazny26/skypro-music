@@ -18,7 +18,9 @@ interface TrackProps {
   subtitle?: string; // Дополнительная информация (опционально, например "(Remix)")
   isActive?: boolean; // Флаг активного трека
   isPlaying?: boolean; // Флаг воспроизведения трека
+  isLiked?: boolean; // Флаг лайкнутого трека
   onSelect: (track: TrackProps['track']) => void; // Обработчик выбора трека
+  onToggleLike: () => void; // Обработчик переключения лайка
 }
 
 // Компонент одного трека в списке
@@ -29,10 +31,17 @@ export default function Track({
   subtitle,
   isActive = false,
   isPlaying = false,
+  isLiked = false,
   onSelect,
+  onToggleLike,
 }: TrackProps) {
   const handleClick = () => {
     onSelect(track);
+  };
+
+  const handleLikeClick = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Предотвращаем всплытие события, чтобы не запускать трек
+    onToggleLike();
   };
 
   return (
@@ -81,7 +90,11 @@ export default function Track({
 
         {/* Блок с длительностью трека и иконкой лайка */}
         <div className={styles.time}>
-          <svg className={styles.timeSvg}>
+          <svg 
+            className={`${styles.timeSvg} ${isLiked ? styles.timeSvgLiked : ''}`}
+            onClick={handleLikeClick}
+            style={{ cursor: 'pointer' }}
+          >
             <use href="/img/icon/sprite.svg#icon-like"></use>
           </svg>
           <span className={styles.timeText}>{duration}</span>

@@ -22,12 +22,14 @@ interface PlaylistProps {
   }>;
   currentTrackId: number | null;
   isPlaying: boolean;
+  likedTracks: number[];
   onTrackSelect: (track: PlaylistProps['tracks'][0]) => void;
+  onToggleLike: (trackId: number) => void;
 }
 
 // Компонент списка треков (плейлиста)
 // Содержит заголовки колонок и список компонентов Track
-export default function Playlist({ tracks, currentTrackId, isPlaying, onTrackSelect }: PlaylistProps) {
+export default function Playlist({ tracks, currentTrackId, isPlaying, likedTracks, onTrackSelect, onToggleLike }: PlaylistProps) {
   return (
     <div className={styles.content}>
       {/* Заголовки колонок таблицы треков */}
@@ -52,7 +54,9 @@ export default function Playlist({ tracks, currentTrackId, isPlaying, onTrackSel
             duration={formatDuration(track.duration_in_seconds)}
             isActive={currentTrackId === track._id}
             isPlaying={currentTrackId === track._id && isPlaying}
+            isLiked={likedTracks.includes(track._id)}
             onSelect={onTrackSelect}
+            onToggleLike={() => onToggleLike(track._id)}
           />
         ))}
       </div>
