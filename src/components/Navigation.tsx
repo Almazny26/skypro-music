@@ -11,7 +11,8 @@ import styles from './Navigation.module.css';
 // Компонент навигации - левая боковая панель с логотипом и меню
 export default function Navigation() {
   // Состояние для отслеживания открыто/закрыто меню
-  const [isMenuOpen, setIsMenuOpen] = useState(true);
+  // При обновлении страницы меню скрыто
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   // Обработчик клика на бургер-меню
   const handleBurgerClick = () => {
@@ -33,7 +34,7 @@ export default function Navigation() {
       </div>
       
       {/* Бургер-меню с обработчиком клика */}
-      <div className={styles.burger} onClick={handleBurgerClick}>
+      <div className={`${styles.burger} ${isMenuOpen ? styles.burgerOpen : ''}`} onClick={handleBurgerClick}>
         <span className={styles.burgerLine}></span>
         <span className={styles.burgerLine}></span>
         <span className={styles.burgerLine}></span>
