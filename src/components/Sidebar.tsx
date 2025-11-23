@@ -10,8 +10,15 @@ export default function Sidebar() {
       {/* Блок с информацией о пользователе */}
       <div className={styles.personal}>
         <p className={styles.personalName}>Sergey.Ivanov</p>
-        {/* Иконка выхода (пока не функциональная) */}
-        <div className={styles.icon}>
+        {/* Аватар пользователя */}
+        <div className={styles.avatar}>
+          <svg className={styles.avatarIcon} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="10" cy="7" r="3" stroke="white" strokeWidth="1.5"/>
+            <path d="M5 17C5 13.134 8.13401 10 12 10C15.866 10 19 13.134 19 17" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
+          </svg>
+        </div>
+        {/* Иконка выхода */}
+        <div className={styles.logoutIcon}>
           <svg>
             <use xlinkHref="/img/icon/sprite.svg#logout"></use>
           </svg>

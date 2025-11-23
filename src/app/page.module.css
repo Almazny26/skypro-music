@@ -27,7 +27,7 @@
 .centerblock {
   width: auto;
   flex-grow: 3;
-  padding: 20px 40px 100px 111px; /* Увеличен нижний отступ для плеера */
+  padding: 20px 40px 100px 50px; /* Отступ слева для соответствия макету (294px от левого края - 244px Navigation = 50px) */
   overflow-y: auto;
   overflow-x: hidden;
 }
