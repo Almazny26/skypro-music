@@ -1,6 +1,10 @@
 .sidebar {
   max-width: 418px;
   padding: 20px 90px 20px 78px;
+  display: flex;
+  flex-direction: column;
+  height: calc(100% - 78px); /* Вычитаем высоту плеера (73px + 5px) */
+  padding-bottom: 64.5px; /* Отступ от последней карточки до плеера */
 }
 
 .personal {
@@ -8,7 +12,7 @@
   flex-direction: row;
   align-items: center;
   justify-content: flex-end;
-  padding: 12px 0 15px 0;
+  padding: 12px 0 0 0;
 }
 
 .personalName {
@@ -20,20 +24,40 @@
   margin-right: 16px;
 }
 
-.icon {
+.avatar {
   width: 43px;
   height: 43px;
   background-color: #313131;
   border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 12px;
+}
+
+.avatarIcon {
+  width: 20px;
+  height: 20px;
+  fill: transparent;
+  stroke: #ffffff;
+}
+
+.logoutIcon {
+  width: 40px;
+  height: 40px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
+.logoutIcon svg {
+  width: 40px;
+  height: 40px;
+}
+
 .block {
-  height: 100%;
-  padding: 240px 0 0 0;
+  margin-top: 200px; /* От иконки выхода (аватара) до первой карточки - уменьшено для поднятия карточек */
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
@@ -43,6 +67,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  padding-bottom: 64.5px; /* От последней карточки до полоски плеера */
 }
 
 .item {

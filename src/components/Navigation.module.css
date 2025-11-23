@@ -25,6 +25,7 @@
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  cursor: pointer;
 }
 
 .burgerLine {
@@ -37,6 +38,12 @@
 .menu {
   display: block;
   visibility: visible;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.menuClosed {
+  display: none;
+  visibility: hidden;
 }
 
 .menuList {
@@ -55,4 +62,3 @@
   line-height: 24px;
   text-decoration: none;
 }
-
