@@ -1,27 +1,44 @@
+'use client';
+
 import Link from 'next/link';
 import styles from './Track.module.css';
 
 // Интерфейс для пропсов компонента Track
 // Определяет какие данные нужны для отображения одного трека
 interface TrackProps {
-  name: string; // Название трека
-  author: string; // Исполнитель
-  album: string; // Название альбома
+  track: {
+    _id: number;
+    name: string;
+    author: string;
+    album: string;
+    duration_in_seconds: number;
+    track_file: string;
+  };
   duration: string; // Длительность трека (например, "4:44")
   subtitle?: string; // Дополнительная информация (опционально, например "(Remix)")
+  isActive?: boolean; // Флаг активного трека
+  onSelect: (track: TrackProps['track']) => void; // Обработчик выбора трека
 }
 
 // Компонент одного трека в списке
 // Принимает данные о треке через пропсы и отображает их
 export default function Track({
-  name,
-  author,
-  album,
+  track,
   duration,
   subtitle,
+  isActive = false,
+  onSelect,
 }: TrackProps) {
+  const handleClick = () => {
+    onSelect(track);
+  };
+
   return (
-    <div className={styles.item}>
+    <div 
+      className={`${styles.item} ${isActive ? styles.itemActive : ''}`}
+      onClick={handleClick}
+      style={{ cursor: 'pointer' }}
+    >
       <div className={styles.track}>
         {/* Блок с названием трека и иконкой */}
         <div className={styles.title}>
@@ -32,8 +49,8 @@ export default function Track({
             </svg>
           </div>
           <div className={styles.titleText}>
-            <Link className={styles.titleLink} href="">
-              {name}
+            <Link className={styles.titleLink} href="" onClick={(e) => e.preventDefault()}>
+              {track.name}
               {/* Если есть subtitle (например, "(Remix)"), отображаем его серым цветом */}
               {subtitle && (
                 <span className={styles.titleSpan}> {subtitle}</span>
@@ -44,15 +61,15 @@ export default function Track({
 
         {/* Блок с именем исполнителя */}
         <div className={styles.author}>
-          <Link className={styles.authorLink} href="">
-            {author}
+          <Link className={styles.authorLink} href="" onClick={(e) => e.preventDefault()}>
+            {track.author}
           </Link>
         </div>
 
         {/* Блок с названием альбома */}
         <div className={styles.album}>
-          <Link className={styles.albumLink} href="">
-            {album}
+          <Link className={styles.albumLink} href="" onClick={(e) => e.preventDefault()}>
+            {track.album}
           </Link>
         </div>
 

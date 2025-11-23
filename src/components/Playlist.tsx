@@ -1,6 +1,7 @@
+'use client';
+
 import styles from './Playlist.module.css';
 import Track from './Track';
-import { data } from '../../data';
 
 // Функция для преобразования секунд в формат MM:SS
 function formatDuration(seconds: number): string {
@@ -9,9 +10,23 @@ function formatDuration(seconds: number): string {
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
 }
 
+// Интерфейс для пропсов компонента Playlist
+interface PlaylistProps {
+  tracks: Array<{
+    _id: number;
+    name: string;
+    author: string;
+    album: string;
+    duration_in_seconds: number;
+    track_file: string;
+  }>;
+  currentTrackId: number | null;
+  onTrackSelect: (track: PlaylistProps['tracks'][0]) => void;
+}
+
 // Компонент списка треков (плейлиста)
 // Содержит заголовки колонок и список компонентов Track
-export default function Playlist() {
+export default function Playlist({ tracks, currentTrackId, onTrackSelect }: PlaylistProps) {
   return (
     <div className={styles.content}>
       {/* Заголовки колонок таблицы треков */}
@@ -28,15 +43,14 @@ export default function Playlist() {
       </div>
       
       {/* Список треков - каждый трек это отдельный компонент Track */}
-      {/* Данные получаются из моковых данных data.ts */}
       <div className={styles.playlist}>
-        {data.map((track) => (
+        {tracks.map((track) => (
           <Track
             key={track._id}
-            name={track.name}
-            author={track.author}
-            album={track.album}
+            track={track}
             duration={formatDuration(track.duration_in_seconds)}
+            isActive={currentTrackId === track._id}
+            onSelect={onTrackSelect}
           />
         ))}
       </div>
