@@ -1,9 +1,16 @@
+'use client';
+
 import Link from 'next/link';
 import styles from './Sidebar.module.css';
 
 // Компонент правой боковой панели
 // Показывает информацию о пользователе и коллекцию плейлистов
 export default function Sidebar() {
+  const handlePlaylistClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    alert('Еще не реализовано');
+  };
+
   return (
     <div className={styles.sidebar}>
       {/* Блок с информацией о пользователе */}
@@ -30,7 +37,7 @@ export default function Sidebar() {
           {/* Каждый плейлист - это изображение, обернутое в ссылку */}
           {/* Пока ссылки ведут на #, позже можно будет переходить на конкретные плейлисты */}
           <div className={styles.item}>
-            <Link className={styles.link} href="#">
+            <Link className={styles.link} href="#" onClick={handlePlaylistClick}>
               <img
                 className={styles.img}
                 src="/img/playlist01.png"
@@ -39,7 +46,7 @@ export default function Sidebar() {
             </Link>
           </div>
           <div className={styles.item}>
-            <Link className={styles.link} href="#">
+            <Link className={styles.link} href="#" onClick={handlePlaylistClick}>
               <img
                 className={styles.img}
                 src="/img/playlist02.png"
@@ -48,7 +55,7 @@ export default function Sidebar() {
             </Link>
           </div>
           <div className={styles.item}>
-            <Link className={styles.link} href="#">
+            <Link className={styles.link} href="#" onClick={handlePlaylistClick}>
               <img
                 className={styles.img}
                 src="/img/playlist03.png"

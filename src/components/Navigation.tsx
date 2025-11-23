@@ -19,6 +19,12 @@ export default function Navigation() {
     setIsMenuOpen(!isMenuOpen);
   };
 
+  // Обработчик клика на пункты меню
+  const handleMenuClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    alert('Еще не реализовано');
+  };
+
   return (
     <nav className={styles.nav}>
       {/* Блок с логотипом приложения */}
@@ -45,17 +51,17 @@ export default function Navigation() {
         <ul className={styles.menuList}>
           <li className={styles.menuItem}>
             {/* Link из Next.js обеспечивает клиентскую навигацию без перезагрузки страницы */}
-            <Link href="/" className={styles.menuLink}>
+            <Link href="/" className={styles.menuLink} onClick={handleMenuClick}>
               Главное
             </Link>
           </li>
           <li className={styles.menuItem}>
-            <Link href="#" className={styles.menuLink}>
+            <Link href="#" className={styles.menuLink} onClick={handleMenuClick}>
               Мой плейлист
             </Link>
           </li>
           <li className={styles.menuItem}>
-            <Link href="/signin" className={styles.menuLink}>
+            <Link href="/signin" className={styles.menuLink} onClick={handleMenuClick}>
               Войти
             </Link>
           </li>
