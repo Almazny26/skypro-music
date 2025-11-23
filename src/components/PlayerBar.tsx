@@ -2,30 +2,24 @@
 
 import Link from 'next/link';
 import { useRef, useEffect, useState } from 'react';
+import { useAppSelector } from '@/store/hooks';
 import styles from './PlayerBar.module.css';
 
 // Интерфейс для пропсов компонента PlayerBar
 interface PlayerBarProps {
-  currentTrack: {
-    _id: number;
-    name: string;
-    author: string;
-    album: string;
-    track_file: string;
-    duration_in_seconds?: number;
-  } | null;
-  isPlaying: boolean;
   isLiked: boolean;
+  isShuffled: boolean;
   onPlayPause: () => void;
   onNextTrack: () => void;
   onPrevTrack: () => void;
-  isShuffled: boolean;
   onToggleShuffle: () => void;
   onToggleLike: () => void;
 }
 
 // Компонент плеера - фиксированная панель внизу страницы
-export default function PlayerBar({ currentTrack, isPlaying, isLiked, onPlayPause, onNextTrack, onPrevTrack, isShuffled, onToggleShuffle, onToggleLike }: PlayerBarProps) {
+export default function PlayerBar({ isLiked, isShuffled, onPlayPause, onNextTrack, onPrevTrack, onToggleShuffle, onToggleLike }: PlayerBarProps) {
+  const currentTrack = useAppSelector((state) => state.track.currentTrack);
+  const isPlaying = useAppSelector((state) => state.track.isPlaying);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -258,7 +252,11 @@ export default function PlayerBar({ currentTrack, isPlaying, isLiked, onPlayPaus
                     <use href="/img/icon/sprite.svg#icon-like"></use>
                   </svg>
                 </div>
-                <div className={`${styles.dislikeBtn} ${styles.btnIcon}`}>
+                <div 
+                  className={`${styles.dislikeBtn} ${styles.btnIcon} ${styles.btn}`}
+                  onClick={() => alert('Еще не реализовано')}
+                  style={{ cursor: 'pointer' }}
+                >
                   <svg className={styles.dislikeSvg}>
                     <use href="/img/icon/sprite.svg#icon-dislike"></use>
                   </svg>

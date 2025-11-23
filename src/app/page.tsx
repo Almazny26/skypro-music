@@ -5,6 +5,8 @@ import styles from './page.module.css';
 // Импортируем все компоненты, из которых состоит главная страница
 // @ - это алиас для папки src, настроен в tsconfig.json
 import { useState } from 'react';
+import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import { setCurrentTrack, setIsPlaying, togglePlayPause } from '@/store/trackSlice';
 import Navigation from '@/components/Navigation';
 import Search from '@/components/Search';
 import Filter from '@/components/Filter';
@@ -15,8 +17,9 @@ import { data } from '../../data';
 
 // Главная страница приложения - собирает все компоненты вместе
 export default function Home() {
-  const [currentTrack, setCurrentTrack] = useState<typeof data[0] | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const dispatch = useAppDispatch();
+  const currentTrack = useAppSelector((state) => state.track.currentTrack);
+  const isPlaying = useAppSelector((state) => state.track.isPlaying);
   const [isShuffled, setIsShuffled] = useState(false);
   const [playedTracks, setPlayedTracks] = useState<number[]>([]); // Для отслеживания воспроизведенных треков в режиме shuffle
   const [likedTracks, setLikedTracks] = useState<number[]>([]); // Список ID лайкнутых треков
@@ -24,11 +27,11 @@ export default function Home() {
   const handleTrackSelect = (track: typeof data[0]) => {
     if (currentTrack?._id === track._id) {
       // Если выбран тот же трек, переключаем воспроизведение
-      setIsPlaying(!isPlaying);
+      dispatch(togglePlayPause());
     } else {
       // Выбираем новый трек и начинаем воспроизведение
-      setCurrentTrack(track);
-      setIsPlaying(true);
+      dispatch(setCurrentTrack(track));
+      dispatch(setIsPlaying(true));
       // При ручном выборе трека обновляем список воспроизведенных (для shuffle)
       if (isShuffled) {
         setPlayedTracks([track._id]);
@@ -38,7 +41,7 @@ export default function Home() {
 
   const handlePlayPause = () => {
     if (currentTrack) {
-      setIsPlaying(!isPlaying);
+      dispatch(togglePlayPause());
     }
   };
 
@@ -93,8 +96,8 @@ export default function Home() {
       if (isShuffled) {
         setPlayedTracks(prev => [...prev, currentTrack._id]);
       }
-      setCurrentTrack(nextTrack);
-      setIsPlaying(true);
+      dispatch(setCurrentTrack(nextTrack));
+      dispatch(setIsPlaying(true));
     }
   };
 
@@ -103,8 +106,8 @@ export default function Home() {
     
     const prevTrack = getPrevTrack();
     if (prevTrack) {
-      setCurrentTrack(prevTrack);
-      setIsPlaying(true);
+      dispatch(setCurrentTrack(prevTrack));
+      dispatch(setIsPlaying(true));
     }
   };
 
@@ -144,8 +147,6 @@ export default function Home() {
             <Filter />
             <Playlist 
               tracks={data}
-              currentTrackId={currentTrack?._id || null}
-              isPlaying={isPlaying}
               likedTracks={likedTracks}
               onTrackSelect={handleTrackSelect}
               onToggleLike={handleToggleLike}
@@ -158,13 +159,11 @@ export default function Home() {
         
         {/* Плеер внизу страницы - фиксированная позиция */}
         <PlayerBar 
-          currentTrack={currentTrack}
-          isPlaying={isPlaying}
           isLiked={currentTrack ? likedTracks.includes(currentTrack._id) : false}
+          isShuffled={isShuffled}
           onPlayPause={handlePlayPause}
           onNextTrack={handleNextTrack}
           onPrevTrack={handlePrevTrack}
-          isShuffled={isShuffled}
           onToggleShuffle={handleToggleShuffle}
           onToggleLike={currentTrack ? () => handleToggleLike(currentTrack._id) : () => {}}
         />

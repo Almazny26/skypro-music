@@ -1,5 +1,6 @@
 'use client';
 
+import { useAppSelector } from '@/store/hooks';
 import styles from './Playlist.module.css';
 import Track from './Track';
 
@@ -20,8 +21,6 @@ interface PlaylistProps {
     duration_in_seconds: number;
     track_file: string;
   }>;
-  currentTrackId: number | null;
-  isPlaying: boolean;
   likedTracks: number[];
   onTrackSelect: (track: PlaylistProps['tracks'][0]) => void;
   onToggleLike: (trackId: number) => void;
@@ -29,7 +28,10 @@ interface PlaylistProps {
 
 // Компонент списка треков (плейлиста)
 // Содержит заголовки колонок и список компонентов Track
-export default function Playlist({ tracks, currentTrackId, isPlaying, likedTracks, onTrackSelect, onToggleLike }: PlaylistProps) {
+export default function Playlist({ tracks, likedTracks, onTrackSelect, onToggleLike }: PlaylistProps) {
+  const currentTrack = useAppSelector((state) => state.track.currentTrack);
+  const isPlaying = useAppSelector((state) => state.track.isPlaying);
+  const currentTrackId = currentTrack?._id || null;
   return (
     <div className={styles.content}>
       {/* Заголовки колонок таблицы треков */}
