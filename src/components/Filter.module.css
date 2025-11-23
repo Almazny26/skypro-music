@@ -59,10 +59,9 @@
 }
 
 .dropdownCompact {
-  padding: 20px;
-  min-width: auto;
+  padding: 34px;
+  min-width: 180px;
   width: max-content;
-  max-width: 100px;
 }
 
 .filter__list {
@@ -85,9 +84,16 @@
 }
 
 .filter__listCompact {
-  gap: 16px;
-  max-height: 160px;
-  max-width: 100px;
+  gap: 28px;
+  max-height: 237px;
+  max-width: 180px;
+  width: 100%;
+}
+
+.dropdownItemCompact {
+  font-size: 20px;
+  line-height: 24px;
+  padding: 12px 0;
 }
 
 .filter__list::-webkit-scrollbar {

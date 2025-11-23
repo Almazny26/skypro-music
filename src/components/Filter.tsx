@@ -101,7 +101,7 @@ export default function Filter() {
               )}
             >
               {uniqueYears.map((year) => (
-                <li key={year} className={styles.dropdownItem}>
+                <li key={year} className={classNames(styles.dropdownItem, styles.dropdownItemCompact)}>
                   {year}
                 </li>
               ))}
