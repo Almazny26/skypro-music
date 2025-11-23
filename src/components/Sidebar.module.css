@@ -1,0 +1,93 @@
+.sidebar {
+  max-width: 418px;
+  padding: 20px 90px 20px 78px;
+  display: flex;
+  flex-direction: column;
+  height: calc(100% - 78px); /* Вычитаем высоту плеера (73px + 5px) */
+  padding-bottom: 64.5px; /* Отступ от последней карточки до плеера */
+}
+
+.personal {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 12px 0 0 0;
+}
+
+.personalName {
+  font-style: normal;
+  font-weight: 400;
+  font-size: 16px;
+  line-height: 24px;
+  color: #ffffff;
+  margin-right: 16px;
+}
+
+.avatar {
+  width: 43px;
+  height: 43px;
+  background-color: #313131;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 12px;
+}
+
+.avatarIcon {
+  width: 20px;
+  height: 20px;
+  fill: transparent;
+  stroke: #ffffff;
+}
+
+.logoutIcon {
+  width: 40px;
+  height: 40px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.logoutIcon svg {
+  width: 40px;
+  height: 40px;
+}
+
+.block {
+  margin-top: 200px; /* От иконки выхода (аватара) до первой карточки - уменьшено для поднятия карточек */
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-bottom: 64.5px; /* От последней карточки до полоски плеера */
+}
+
+.item {
+  width: 250px;
+  height: 150px;
+}
+
+.item:not(:last-child) {
+  margin-bottom: 30px;
+}
+
+.link {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.img {
+  width: 100%;
+  height: auto;
+}
+
+
