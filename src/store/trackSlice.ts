@@ -44,3 +44,4 @@ const trackSlice = createSlice({
 export const { setCurrentTrack, setIsPlaying, togglePlayPause } = trackSlice.actions;
 export default trackSlice.reducer;
 
+
