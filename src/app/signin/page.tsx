@@ -1,3 +1,5 @@
+'use client';
+
 import styles from './signin.module.css';
 // classNames - библиотека для удобного объединения CSS классов
 import classNames from 'classnames';
@@ -7,12 +9,18 @@ import Image from 'next/image';
 // Страница входа в систему
 // Пока только форма без функционала авторизации
 export default function Signin() {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    // TODO: Реализовать логику авторизации
+    alert('Еще не реализовано');
+  };
+
   return (
     <div className={styles.wrapper}>
       <div className={styles.containerEnter}>
         <div className={styles.modalBlock}>
           {/* Форма входа */}
-          <form className={styles.modalForm}>
+          <form className={styles.modalForm} onSubmit={handleSubmit}>
             {/* Логотип с ссылкой на главную страницу */}
             <Link href="/">
               <div className={styles.modalLogo}>
@@ -29,9 +37,10 @@ export default function Signin() {
             {/* classNames объединяет несколько классов: базовый modalInput и login для отступа */}
             <input
               className={classNames(styles.modalInput, styles.login)}
-              type="text"
+              type="email"
               name="login"
               placeholder="Почта"
+              required
             />
 
             {/* Поле ввода пароля */}
@@ -40,13 +49,14 @@ export default function Signin() {
               type="password"
               name="password"
               placeholder="Пароль"
+              required
             />
 
             {/* Блок для отображения ошибок валидации (пока пустой) */}
             <div className={styles.errorContainer}>{/*Блок для ошибок*/}</div>
 
             {/* Кнопка входа */}
-            <button className={styles.modalBtnEnter}>Войти</button>
+            <button type="submit" className={styles.modalBtnEnter}>Войти</button>
 
             {/* Ссылка на страницу регистрации */}
             <Link href="/signup" className={styles.modalBtnSignup}>

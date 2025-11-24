@@ -23,6 +23,7 @@ export default function Home() {
   const [isShuffled, setIsShuffled] = useState(false);
   const [playedTracks, setPlayedTracks] = useState<number[]>([]); // Для отслеживания воспроизведенных треков в режиме shuffle
   const [likedTracks, setLikedTracks] = useState<number[]>([]); // Список ID лайкнутых треков
+  const [searchQuery, setSearchQuery] = useState(''); // Поисковый запрос
 
   const handleTrackSelect = (track: typeof data[0]) => {
     if (currentTrack?._id === track._id) {
@@ -133,6 +134,19 @@ export default function Home() {
     });
   };
 
+  const handleSearchChange = (query: string) => {
+    setSearchQuery(query);
+  };
+
+  // Фильтрация треков по поисковому запросу
+  const filteredTracks = searchQuery
+    ? data.filter(track => 
+        track.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        track.author.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        track.album.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : data;
+
   return (
     <div className={styles.wrapper}>
       <div className={styles.container}>
@@ -142,11 +156,11 @@ export default function Home() {
           
           {/* Центральный блок с поиском, фильтрами и списком треков */}
           <div className={styles.centerblock}>
-            <Search />
+            <Search onSearchChange={handleSearchChange} />
             <h2 className={styles.h2}>Треки</h2>
             <Filter />
             <Playlist 
-              tracks={data}
+              tracks={filteredTracks}
               likedTracks={likedTracks}
               onTrackSelect={handleTrackSelect}
               onToggleLike={handleToggleLike}

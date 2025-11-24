@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import styles from './Track.module.css';
 
 // Интерфейс для пропсов компонента Track
@@ -64,28 +63,28 @@ export default function Track({
             )}
           </div>
           <div className={styles.titleText}>
-            <Link className={styles.titleLink} href="" onClick={(e) => e.preventDefault()}>
+            <span className={styles.titleLink}>
               {track.name}
               {/* Если есть subtitle (например, "(Remix)"), отображаем его серым цветом */}
               {subtitle && (
                 <span className={styles.titleSpan}> {subtitle}</span>
               )}
-            </Link>
+            </span>
           </div>
         </div>
 
         {/* Блок с именем исполнителя */}
         <div className={styles.author}>
-          <Link className={styles.authorLink} href="" onClick={(e) => e.preventDefault()}>
+          <span className={styles.authorLink}>
             {track.author}
-          </Link>
+          </span>
         </div>
 
         {/* Блок с названием альбома */}
         <div className={styles.album}>
-          <Link className={styles.albumLink} href="" onClick={(e) => e.preventDefault()}>
+          <span className={styles.albumLink}>
             {track.album}
-          </Link>
+          </span>
         </div>
 
         {/* Блок с длительностью трека и иконкой лайка */}

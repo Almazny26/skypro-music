@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useRef, useEffect, useState } from 'react';
 import { useAppSelector } from '@/store/hooks';
 import styles from './PlayerBar.module.css';
@@ -50,7 +49,9 @@ export default function PlayerBar({ isLiked, isShuffled, onPlayPause, onNextTrac
       // Проверяем, готов ли аудио к воспроизведению
       if (audio.readyState >= 2) { // HAVE_CURRENT_DATA или выше
         audio.play().catch((error) => {
-          console.error('Ошибка воспроизведения:', error);
+          if (process.env.NODE_ENV === 'development') {
+            console.error('Ошибка воспроизведения:', error);
+          }
         });
       }
     } else {
@@ -85,7 +86,7 @@ export default function PlayerBar({ isLiked, isShuffled, onPlayPause, onNextTrac
       if (isPlaying && currentTrack) {
         audio.play().catch((error) => {
           // Игнорируем ошибку, если воспроизведение было прервано загрузкой
-          if (error.name !== 'AbortError') {
+          if (error.name !== 'AbortError' && process.env.NODE_ENV === 'development') {
             console.error('Ошибка воспроизведения:', error);
           }
         });
@@ -228,16 +229,16 @@ export default function PlayerBar({ isLiked, isShuffled, onPlayPause, onNextTrac
                 
                 {/* Название текущего трека */}
                 <div className={styles.author}>
-                  <Link className={styles.authorLink} href="">
+                  <span className={styles.authorLink}>
                     {currentTrack?.name || 'Ты та...'}
-                  </Link>
+                  </span>
                 </div>
                 
                 {/* Исполнитель текущего трека */}
                 <div className={styles.album}>
-                  <Link className={styles.albumLink} href="">
+                  <span className={styles.albumLink}>
                     {currentTrack?.author || 'Баста'}
-                  </Link>
+                  </span>
                 </div>
               </div>
 
