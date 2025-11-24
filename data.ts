@@ -131,6 +131,3 @@ export const data = [
     stared_user: [],
   },
 ];
-
-
-

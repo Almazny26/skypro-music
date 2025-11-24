@@ -14,7 +14,6 @@ import Playlist from '@/components/Playlist';
 import Sidebar from '@/components/Sidebar';
 import PlayerBar from '@/components/PlayerBar';
 import { data } from '../../data';
-
 // Главная страница приложения - собирает все компоненты вместе
 export default function Home() {
   const dispatch = useAppDispatch();
