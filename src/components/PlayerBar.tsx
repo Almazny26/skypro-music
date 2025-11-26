@@ -1,7 +1,8 @@
 'use client';
 
 import { useRef, useEffect, useState } from 'react';
-import { useAppSelector } from '@/store/hooks';
+import { useAppSelector, useAppDispatch } from '@/store/hooks';
+import { setCurrentTime as setCurrentTimeAction, setDuration as setDurationAction } from '@/store/trackSlice';
 import styles from './PlayerBar.module.css';
 
 // Интерфейс для пропсов компонента PlayerBar
@@ -17,6 +18,7 @@ interface PlayerBarProps {
 
 // Компонент плеера - фиксированная панель внизу страницы
 export default function PlayerBar({ isLiked, isShuffled, onPlayPause, onNextTrack, onPrevTrack, onToggleShuffle, onToggleLike }: PlayerBarProps) {
+  const dispatch = useAppDispatch();
   const currentTrack = useAppSelector((state) => state.track.currentTrack);
   const isPlaying = useAppSelector((state) => state.track.isPlaying);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -35,8 +37,9 @@ export default function PlayerBar({ isLiked, isShuffled, onPlayPause, onNextTrac
       audio.src = currentTrack.track_file;
       audio.load(); // Загружаем новый источник
       setCurrentTime(0);
+      dispatch(setCurrentTimeAction(0));
     }
-  }, [currentTrack]);
+  }, [currentTrack, dispatch]);
 
   // Управление воспроизведением через audio элемент (только для play/pause, не при смене трека)
   useEffect(() => {
@@ -73,11 +76,15 @@ export default function PlayerBar({ isLiked, isShuffled, onPlayPause, onNextTrac
     if (!audio) return;
 
     const handleTimeUpdate = () => {
-      setCurrentTime(audio.currentTime);
+      const time = audio.currentTime;
+      setCurrentTime(time);
+      dispatch(setCurrentTimeAction(time));
     };
 
     const handleLoadedMetadata = () => {
-      setDuration(audio.duration);
+      const dur = audio.duration;
+      setDuration(dur);
+      dispatch(setDurationAction(dur));
     };
 
     // Обработчик готовности к воспроизведению
@@ -102,7 +109,7 @@ export default function PlayerBar({ isLiked, isShuffled, onPlayPause, onNextTrac
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('canplay', handleCanPlay);
     };
-  }, [currentTrack, isPlaying]);
+  }, [currentTrack, isPlaying, dispatch]);
 
   // Обработчик окончания трека
   const handleEnded = () => {
@@ -130,10 +137,20 @@ export default function PlayerBar({ isLiked, isShuffled, onPlayPause, onNextTrac
 
     audio.currentTime = newTime;
     setCurrentTime(newTime);
+    dispatch(setCurrentTimeAction(newTime));
   };
 
   // Вычисление процента прогресса
   const progressPercentage = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+  // Функция форматирования времени в формат MM:SS
+  const formatTime = (seconds: number): string => {
+    if (!isFinite(seconds) || isNaN(seconds) || seconds < 0) return '0:00';
+    const roundedSeconds = Math.floor(seconds);
+    const mins = Math.floor(roundedSeconds / 60);
+    const secs = roundedSeconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
 
   return (
     <div className={styles.bar}>
@@ -269,6 +286,15 @@ export default function PlayerBar({ isLiked, isShuffled, onPlayPause, onNextTrac
           {/* Блок управления громкостью */}
           <div className={styles.volumeBlock}>
             <div className={styles.volumeContent}>
+              {/* Отображение времени проигрывания */}
+              <div className={styles.timeContainer}>
+                <span className={styles.timeText}>
+                  <span className={styles.timeTextPart}>{formatTime(currentTime)}</span>
+                  <span className={styles.timeTextSeparator}>/</span>
+                  <span className={styles.timeTextPart}>{formatTime(duration)}</span>
+                </span>
+              </div>
+              
               {/* Иконка громкости */}
               <div className={styles.volumeImage}>
                 <svg className={styles.volumeSvg}>

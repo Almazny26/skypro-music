@@ -16,11 +16,15 @@ interface Track {
 interface TrackState {
   currentTrack: Track | null;
   isPlaying: boolean;
+  currentTime: number;
+  duration: number;
 }
 
 const initialState: TrackState = {
   currentTrack: null,
   isPlaying: false,
+  currentTime: 0,
+  duration: 0,
 };
 
 const trackSlice = createSlice({
@@ -38,15 +42,20 @@ const trackSlice = createSlice({
         state.isPlaying = !state.isPlaying;
       }
     },
+    setCurrentTime: (state, action: PayloadAction<number>) => {
+      state.currentTime = action.payload;
+    },
+    setDuration: (state, action: PayloadAction<number>) => {
+      state.duration = action.payload;
+    },
   },
 });
 
-export const { setCurrentTrack, setIsPlaying, togglePlayPause } = trackSlice.actions;
+export const {
+  setCurrentTrack,
+  setIsPlaying,
+  togglePlayPause,
+  setCurrentTime,
+  setDuration,
+} = trackSlice.actions;
 export default trackSlice.reducer;
-
-
-
-
-
-
-
