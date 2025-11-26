@@ -31,65 +31,88 @@ interface PlaylistProps {
 
 // Компонент списка треков (плейлиста)
 // Содержит заголовки колонок и список компонентов Track
-export default function Playlist({ tracks, likedTracks, onTrackSelect, onToggleLike }: PlaylistProps) {
+export default function Playlist({
+  tracks,
+  likedTracks,
+  onTrackSelect,
+  onToggleLike,
+}: PlaylistProps) {
   const currentTrack = useAppSelector((state) => state.track.currentTrack);
   const isPlaying = useAppSelector((state) => state.track.isPlaying);
   const currentTime = useAppSelector((state) => state.track.currentTime);
   const duration = useAppSelector((state) => state.track.duration);
   const currentTrackId = currentTrack?._id || null;
-  
-  // Состояние для хранения реальных длительностей треков
-  const [trackDurations, setTrackDurations] = useState<Map<number, number>>(new Map());
 
-  // Загрузка реальной длительности треков из аудио файлов
+  // Храним реальные длительности треков (получаем из метаданных аудио)
+  // Используем Map для быстрого доступа по ID трека
+  const [trackDurations, setTrackDurations] = useState<Map<number, number>>(
+    new Map(),
+  );
+
+  // Загружаем реальную длительность каждого трека из аудио файлов
+  // Это нужно потому что в данных может быть неверная длительность
   useEffect(() => {
-    let cancelled = false;
-    const audioElements: HTMLAudioElement[] = [];
-    
+    let cancelled = false; // флаг для отмены загрузки если компонент размонтировался
+    const audioElements: HTMLAudioElement[] = []; // массив всех созданных audio элементов
+
     const loadDurations = async () => {
       const durations = new Map<number, number>();
-      
-      // Загружаем метаданные для каждого трека
+
+      // Для каждого трека создаем Promise который загрузит метаданные
       const promises = tracks.map((track) => {
         return new Promise<void>((resolve) => {
+          // Если загрузка отменена, сразу резолвим
           if (cancelled) {
             resolve();
             return;
           }
-          
+
+          // Создаем новый audio элемент для загрузки метаданных
           const audio = new Audio();
-          audioElements.push(audio);
-          
+          audioElements.push(audio); // сохраняем для очистки
+
+          // Когда загрузились метаданные (длительность)
           const handleLoadedMetadata = () => {
-            if (!cancelled && isFinite(audio.duration) && !isNaN(audio.duration) && audio.duration > 0) {
-              durations.set(track._id, audio.duration);
+            // Проверяем что данные валидные и загрузка не отменена
+            if (
+              !cancelled &&
+              isFinite(audio.duration) &&
+              !isNaN(audio.duration) &&
+              audio.duration > 0
+            ) {
+              durations.set(track._id, audio.duration); // сохраняем длительность
             }
+            // Удаляем обработчики чтобы не было утечек
             audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
             audio.removeEventListener('error', handleError);
             resolve();
           };
-          
+
+          // Если произошла ошибка загрузки
           const handleError = () => {
             if (!cancelled) {
-              // Если не удалось загрузить, используем значение из данных
+              // Используем длительность из исходных данных как fallback
               durations.set(track._id, track.duration_in_seconds);
             }
             audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
             audio.removeEventListener('error', handleError);
             resolve();
           };
-          
+
+          // Подписываемся на события
           audio.addEventListener('loadedmetadata', handleLoadedMetadata);
           audio.addEventListener('error', handleError);
-          
-          // Устанавливаем preload для загрузки только метаданных
+
+          // Устанавливаем preload='metadata' чтобы загрузить только метаданные, не весь файл
           audio.preload = 'metadata';
-          audio.src = track.track_file;
+          audio.src = track.track_file; // начинаем загрузку
         });
       });
-      
+
+      // Ждем пока все треки загрузят метаданные
       await Promise.all(promises);
-      
+
+      // Если загрузка не была отменена, обновляем состояние
       if (!cancelled) {
         setTrackDurations(durations);
       }
@@ -97,13 +120,13 @@ export default function Playlist({ tracks, likedTracks, onTrackSelect, onToggleL
 
     loadDurations();
 
-    // Очистка: останавливаем загрузку всех аудио элементов при размонтировании или изменении tracks
+    // Cleanup функция - выполнится при размонтировании или изменении tracks
     return () => {
-      cancelled = true;
-      // Останавливаем загрузку всех аудио элементов
+      cancelled = true; // помечаем что загрузка отменена
+      // Останавливаем загрузку всех audio элементов
       audioElements.forEach((audio) => {
-        audio.src = '';
-        audio.load();
+        audio.src = ''; // очищаем источник
+        audio.load(); // перезагружаем (это останавливает загрузку)
       });
     };
   }, [tracks]);
@@ -121,24 +144,30 @@ export default function Playlist({ tracks, likedTracks, onTrackSelect, onToggleL
           </svg>
         </div>
       </div>
-      
+
       {/* Список треков - каждый трек это отдельный компонент Track */}
       <div className={styles.playlist}>
         {tracks.map((track) => {
-          // Для активного трека показываем оставшееся время, для остальных - общую длительность
+          // Проверяем является ли этот трек текущим
           const isActive = currentTrackId === track._id;
           let displayDuration: string;
-          
+
+          // Для активного трека показываем оставшееся время (обратный отсчет)
           if (isActive && duration > 0) {
-            const remainingTime = Math.max(0, duration - currentTime);
+            const remainingTime = Math.max(0, duration - currentTime); // Math.max чтобы не было отрицательных значений
             displayDuration = formatDuration(remainingTime);
           } else {
-            // Используем реальную длительность из загруженных метаданных, если доступна
+            // Для остальных треков показываем общую длительность
+            // Сначала пытаемся взять реальную длительность из загруженных метаданных
             const realDuration = trackDurations.get(track._id);
-            const trackDuration = realDuration !== undefined ? realDuration : track.duration_in_seconds;
+            // Если реальная длительность есть - используем её, иначе из данных
+            const trackDuration =
+              realDuration !== undefined
+                ? realDuration
+                : track.duration_in_seconds;
             displayDuration = formatDuration(trackDuration);
           }
-          
+
           return (
             <Track
               key={track._id}
@@ -156,5 +185,3 @@ export default function Playlist({ tracks, likedTracks, onTrackSelect, onToggleL
     </div>
   );
 }
-
-

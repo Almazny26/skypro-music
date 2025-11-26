@@ -26,40 +26,43 @@ export default function Home() {
   const currentTrack = useAppSelector((state) => state.track.currentTrack);
   const isPlaying = useAppSelector((state) => state.track.isPlaying);
   const playlist = useAppSelector((state) => state.track.playlist);
-  const [isShuffled, setIsShuffled] = useState(false);
-  const [playedTracks, setPlayedTracks] = useState<number[]>([]); // Для отслеживания воспроизведенных треков в режиме shuffle
-  const [likedTracks, setLikedTracks] = useState<number[]>([]); // Список ID лайкнутых треков
-  const [searchQuery, setSearchQuery] = useState(''); // Поисковый запрос
+  // Локальные состояния компонента
+  const [isShuffled, setIsShuffled] = useState(false); // включен ли режим перемешивания
+  const [playedTracks, setPlayedTracks] = useState<number[]>([]); // массив ID треков которые уже проиграли в shuffle режиме
+  const [likedTracks, setLikedTracks] = useState<number[]>([]); // массив ID лайкнутых треков
+  const [searchQuery, setSearchQuery] = useState(''); // текст поиска
 
-  // Инициализация плейлиста при монтировании компонента
+  // При первой загрузке страницы загружаем все треки в плейлист
   useEffect(() => {
     dispatch(setPlaylist(data));
-  }, [dispatch]);
+  }, [dispatch]); // dispatch в зависимостях чтобы линтер не ругался
 
-  // Обновление плейлиста при изменении поискового запроса
+  // Когда меняется поисковый запрос, фильтруем треки
   useEffect(() => {
     const filtered = searchQuery
       ? data.filter(
           (track) =>
+            // ищем по названию, исполнителю или альбому (без учета регистра)
             track.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             track.author.toLowerCase().includes(searchQuery.toLowerCase()) ||
             track.album.toLowerCase().includes(searchQuery.toLowerCase()),
         )
-      : data;
+      : data; // если поиск пустой, показываем все треки
     dispatch(setPlaylist(filtered));
   }, [searchQuery, dispatch]);
 
+  // Обработчик клика на трек в списке
   const handleTrackSelect = (track: Track) => {
+    // Если кликнули на тот же трек что уже играет - просто пауза/плей
     if (currentTrack?._id === track._id) {
-      // Если выбран тот же трек, переключаем воспроизведение
       dispatch(togglePlayPause());
     } else {
-      // Выбираем новый трек и начинаем воспроизведение
+      // Иначе выбираем новый трек и сразу начинаем играть
       dispatch(setCurrentTrack(track));
       dispatch(setIsPlaying(true));
-      // При ручном выборе трека обновляем список воспроизведенных (для shuffle)
+      // В shuffle режиме сбрасываем список воспроизведенных, начинаем заново
       if (isShuffled) {
-        setPlayedTracks([track._id]);
+        setPlayedTracks([track._id]); // оставляем только текущий трек
       }
     }
   };
@@ -70,108 +73,121 @@ export default function Home() {
     }
   };
 
+  // Функция для получения следующего трека
   const getNextTrack = (): Track | null => {
-    if (!currentTrack) return null;
+    if (!currentTrack) return null; // если нет текущего трека, ничего не возвращаем
 
     if (isShuffled) {
-      // Режим перемешивания: выбираем случайный трек из текущего плейлиста, который еще не был воспроизведен
+      // В режиме перемешивания выбираем случайный трек
+      // Сначала находим все треки которые еще не играли
       const unplayedTracks = playlist.filter(
         (track) => !playedTracks.includes(track._id),
       );
 
-      // Если все треки были воспроизведены, сбрасываем список
+      // Если все треки уже проиграли, сбрасываем список и выбираем из всех кроме текущего
       if (unplayedTracks.length === 0) {
-        setPlayedTracks([currentTrack._id]);
+        setPlayedTracks([currentTrack._id]); // начинаем заново
         const availableTracks = playlist.filter(
-          (track) => track._id !== currentTrack._id,
+          (track) => track._id !== currentTrack._id, // исключаем текущий трек
         );
-        if (availableTracks.length === 0) return null;
+        if (availableTracks.length === 0) return null; // если больше нет треков
+        // Выбираем случайный из доступных
         const randomTrack =
           availableTracks[Math.floor(Math.random() * availableTracks.length)];
         return randomTrack;
       }
 
-      // Выбираем случайный трек из невоспроизведенных
+      // Выбираем случайный трек из тех что еще не играли
       const randomTrack =
         unplayedTracks[Math.floor(Math.random() * unplayedTracks.length)];
       return randomTrack;
     } else {
-      // Обычный режим: следующий трек по порядку из текущего плейлиста
+      // Обычный режим - просто следующий трек по порядку
       const currentIndex = playlist.findIndex(
         (track) => track._id === currentTrack._id,
       );
       if (currentIndex !== -1) {
-        // Если текущий трек - последний в плейлисте, не переключаем
+        // Если это последний трек в списке, не переключаем (возвращаем null)
         if (currentIndex === playlist.length - 1) {
           return null;
         }
+        // Иначе берем следующий по индексу
         const nextIndex = currentIndex + 1;
         return playlist[nextIndex];
       }
     }
-    return null;
+    return null; // на всякий случай
   };
 
+  // Функция для получения предыдущего трека
   const getPrevTrack = (): Track | null => {
     if (!currentTrack) return null;
 
-    // Для предыдущего трека используем порядок текущего плейлиста
+    // Находим индекс текущего трека в плейлисте
     const currentIndex = playlist.findIndex(
       (track) => track._id === currentTrack._id,
     );
     if (currentIndex !== -1) {
-      // Если текущий трек - первый в плейлисте, не переключаем
+      // Если это первый трек, не переключаем
       if (currentIndex === 0) {
         return null;
       }
+      // Берем предыдущий по индексу
       const prevIndex = currentIndex - 1;
       return playlist[prevIndex];
     }
     return null;
   };
 
+  // Обработчик кнопки "следующий трек"
   const handleNextTrack = () => {
-    if (!currentTrack) return;
+    if (!currentTrack) return; // если нет трека, ничего не делаем
 
     const nextTrack = getNextTrack();
     if (nextTrack) {
-      // Добавляем текущий трек в список воспроизведенных (для shuffle)
+      // В shuffle режиме добавляем текущий трек в список воспроизведенных
       if (isShuffled) {
-        setPlayedTracks((prev) => [...prev, currentTrack._id]);
+        setPlayedTracks((prev) => [...prev, currentTrack._id]); // добавляем в конец массива
       }
+      // Переключаемся на следующий трек и начинаем играть
       dispatch(setCurrentTrack(nextTrack));
       dispatch(setIsPlaying(true));
     }
+    // Если nextTrack null, ничего не происходит (например, последний трек)
   };
 
+  // Обработчик кнопки "предыдущий трек"
   const handlePrevTrack = () => {
     if (!currentTrack) return;
 
     const prevTrack = getPrevTrack();
     if (prevTrack) {
+      // Переключаемся на предыдущий трек и начинаем играть
       dispatch(setCurrentTrack(prevTrack));
       dispatch(setIsPlaying(true));
     }
   };
 
+  // Переключение режима перемешивания
   const handleToggleShuffle = () => {
-    setIsShuffled(!isShuffled);
-    // Сбрасываем список воспроизведенных треков при переключении режима
+    setIsShuffled(!isShuffled); // меняем состояние на противоположное
+    // При переключении режима сбрасываем список воспроизведенных треков
     if (currentTrack) {
-      setPlayedTracks([currentTrack._id]);
+      setPlayedTracks([currentTrack._id]); // оставляем только текущий
     } else {
-      setPlayedTracks([]);
+      setPlayedTracks([]); // если нет трека, список пустой
     }
   };
 
+  // Переключение лайка на треке
   const handleToggleLike = (trackId: number) => {
     setLikedTracks((prev) => {
+      // Если трек уже лайкнут - убираем из списка
       if (prev.includes(trackId)) {
-        // Убираем лайк
-        return prev.filter((id) => id !== trackId);
+        return prev.filter((id) => id !== trackId); // фильтруем массив, убираем этот id
       } else {
-        // Добавляем лайк
-        return [...prev, trackId];
+        // Если не лайкнут - добавляем
+        return [...prev, trackId]; // создаем новый массив с добавленным id
       }
     });
   };
