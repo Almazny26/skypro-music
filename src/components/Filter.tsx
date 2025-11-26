@@ -55,6 +55,13 @@ export default function Filter() {
     }
   };
 
+  // Обработчик выбора значения фильтра
+  const handleFilterSelect = (filterType: 'author' | 'year' | 'genre', value: string | number) => {
+    // TODO: Реализовать логику фильтрации треков
+    alert(`Еще не реализовано: Фильтр по ${filterType === 'author' ? 'исполнителю' : filterType === 'year' ? 'году' : 'жанру'} - ${value}`);
+    setOpenFilter(null);
+  };
+
   return (
     <div className={styles.filter}>
       <div className={styles.filterTitle}>Искать по:</div>
@@ -73,7 +80,11 @@ export default function Filter() {
           <div className={styles.dropdown}>
             <ul className={styles.filter__list}>
               {uniqueAuthors.map((author) => (
-                <li key={author} className={styles.dropdownItem}>
+                <li 
+                  key={author} 
+                  className={styles.dropdownItem}
+                  onClick={() => handleFilterSelect('author', author)}
+                >
                   {author}
                 </li>
               ))}
@@ -101,7 +112,11 @@ export default function Filter() {
               )}
             >
               {uniqueYears.map((year) => (
-                <li key={year} className={styles.dropdownItem}>
+                <li 
+                  key={year} 
+                  className={classNames(styles.dropdownItem, styles.dropdownItemCompact)}
+                  onClick={() => handleFilterSelect('year', year)}
+                >
                   {year}
                 </li>
               ))}
@@ -124,7 +139,11 @@ export default function Filter() {
           <div className={styles.dropdown}>
             <ul className={styles.filter__list}>
               {uniqueGenres.map((genre) => (
-                <li key={genre} className={styles.dropdownItem}>
+                <li 
+                  key={genre} 
+                  className={styles.dropdownItem}
+                  onClick={() => handleFilterSelect('genre', genre)}
+                >
                   {genre}
                 </li>
               ))}
@@ -135,3 +154,4 @@ export default function Filter() {
     </div>
   );
 }
+

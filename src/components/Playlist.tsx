@@ -1,6 +1,8 @@
+'use client';
+
+import { useAppSelector } from '@/store/hooks';
 import styles from './Playlist.module.css';
 import Track from './Track';
-import { data } from '../../data';
 
 // Функция для преобразования секунд в формат MM:SS
 function formatDuration(seconds: number): string {
@@ -9,9 +11,27 @@ function formatDuration(seconds: number): string {
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
 }
 
+// Интерфейс для пропсов компонента Playlist
+interface PlaylistProps {
+  tracks: Array<{
+    _id: number;
+    name: string;
+    author: string;
+    album: string;
+    duration_in_seconds: number;
+    track_file: string;
+  }>;
+  likedTracks: number[];
+  onTrackSelect: (track: PlaylistProps['tracks'][0]) => void;
+  onToggleLike: (trackId: number) => void;
+}
+
 // Компонент списка треков (плейлиста)
 // Содержит заголовки колонок и список компонентов Track
-export default function Playlist() {
+export default function Playlist({ tracks, likedTracks, onTrackSelect, onToggleLike }: PlaylistProps) {
+  const currentTrack = useAppSelector((state) => state.track.currentTrack);
+  const isPlaying = useAppSelector((state) => state.track.isPlaying);
+  const currentTrackId = currentTrack?._id || null;
   return (
     <div className={styles.content}>
       {/* Заголовки колонок таблицы треков */}
@@ -22,25 +42,28 @@ export default function Playlist() {
         <div className={styles.col04}>
           {/* Иконка часов для колонки с длительностью */}
           <svg className={styles.titleSvg}>
-            <use xlinkHref="/img/icon/sprite.svg#icon-watch"></use>
+            <use href="/img/icon/sprite.svg#icon-watch"></use>
           </svg>
         </div>
       </div>
       
       {/* Список треков - каждый трек это отдельный компонент Track */}
-      {/* Данные получаются из моковых данных data.ts */}
       <div className={styles.playlist}>
-        {data.map((track) => (
+        {tracks.map((track) => (
           <Track
             key={track._id}
-            name={track.name}
-            author={track.author}
-            album={track.album}
+            track={track}
             duration={formatDuration(track.duration_in_seconds)}
+            isActive={currentTrackId === track._id}
+            isPlaying={currentTrackId === track._id && isPlaying}
+            isLiked={likedTracks.includes(track._id)}
+            onSelect={onTrackSelect}
+            onToggleLike={() => onToggleLike(track._id)}
           />
         ))}
       </div>
     </div>
   );
 }
+
 

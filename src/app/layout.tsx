@@ -2,6 +2,7 @@
 import type { Metadata } from "next";
 import { Montserrat } from "next/font/google";
 import "./globals.css";
+import { ReduxProvider } from "@/store/ReduxProvider";
 
 // Настраиваем шрифт Montserrat через Google Fonts
 // variable - создает CSS переменную для использования в стилях
@@ -30,7 +31,9 @@ export default function RootLayout({
     <html lang="ru">
       {/* Применяем шрифт Montserrat через CSS переменную */}
       <body className={montserrat.variable}>
-        {children}
+        <ReduxProvider>
+          {children}
+        </ReduxProvider>
       </body>
     </html>
   );

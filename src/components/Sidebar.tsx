@@ -1,10 +1,16 @@
-import Image from 'next/image';
+'use client';
+
 import Link from 'next/link';
 import styles from './Sidebar.module.css';
 
 // Компонент правой боковой панели
 // Показывает информацию о пользователе и коллекцию плейлистов
 export default function Sidebar() {
+  const handlePlaylistClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    alert('Еще не реализовано');
+  };
+
   return (
     <div className={styles.sidebar}>
       {/* Блок с информацией о пользователе */}
@@ -20,7 +26,7 @@ export default function Sidebar() {
         {/* Иконка выхода */}
         <div className={styles.logoutIcon}>
           <svg>
-            <use xlinkHref="/img/icon/sprite.svg#logout"></use>
+            <use href="/img/icon/sprite.svg#logout"></use>
           </svg>
         </div>
       </div>
@@ -31,35 +37,29 @@ export default function Sidebar() {
           {/* Каждый плейлист - это изображение, обернутое в ссылку */}
           {/* Пока ссылки ведут на #, позже можно будет переходить на конкретные плейлисты */}
           <div className={styles.item}>
-            <Link className={styles.link} href="#">
-              <Image
+            <Link className={styles.link} href="#" onClick={handlePlaylistClick}>
+              <img
                 className={styles.img}
                 src="/img/playlist01.png"
                 alt="day's playlist"
-                width={250}
-                height={170}
               />
             </Link>
           </div>
           <div className={styles.item}>
-            <Link className={styles.link} href="#">
-              <Image
+            <Link className={styles.link} href="#" onClick={handlePlaylistClick}>
+              <img
                 className={styles.img}
                 src="/img/playlist02.png"
                 alt="day's playlist"
-                width={250}
-                height={170}
               />
             </Link>
           </div>
           <div className={styles.item}>
-            <Link className={styles.link} href="#">
-              <Image
+            <Link className={styles.link} href="#" onClick={handlePlaylistClick}>
+              <img
                 className={styles.img}
                 src="/img/playlist03.png"
                 alt="day's playlist"
-                width={250}
-                height={170}
               />
             </Link>
           </div>
@@ -68,4 +68,5 @@ export default function Sidebar() {
     </div>
   );
 }
+
 

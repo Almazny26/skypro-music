@@ -11,11 +11,18 @@ import styles from './Navigation.module.css';
 // Компонент навигации - левая боковая панель с логотипом и меню
 export default function Navigation() {
   // Состояние для отслеживания открыто/закрыто меню
-  const [isMenuOpen, setIsMenuOpen] = useState(true);
+  // При обновлении страницы меню скрыто
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   // Обработчик клика на бургер-меню
   const handleBurgerClick = () => {
     setIsMenuOpen(!isMenuOpen);
+  };
+
+  // Обработчик клика на пункты меню
+  const handleMenuClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    alert('Еще не реализовано');
   };
 
   return (
@@ -33,7 +40,7 @@ export default function Navigation() {
       </div>
       
       {/* Бургер-меню с обработчиком клика */}
-      <div className={styles.burger} onClick={handleBurgerClick}>
+      <div className={`${styles.burger} ${isMenuOpen ? styles.burgerOpen : ''}`} onClick={handleBurgerClick}>
         <span className={styles.burgerLine}></span>
         <span className={styles.burgerLine}></span>
         <span className={styles.burgerLine}></span>
@@ -44,17 +51,17 @@ export default function Navigation() {
         <ul className={styles.menuList}>
           <li className={styles.menuItem}>
             {/* Link из Next.js обеспечивает клиентскую навигацию без перезагрузки страницы */}
-            <Link href="/" className={styles.menuLink}>
+            <Link href="/" className={styles.menuLink} onClick={handleMenuClick}>
               Главное
             </Link>
           </li>
           <li className={styles.menuItem}>
-            <Link href="#" className={styles.menuLink}>
+            <Link href="#" className={styles.menuLink} onClick={handleMenuClick}>
               Мой плейлист
             </Link>
           </li>
           <li className={styles.menuItem}>
-            <Link href="/signin" className={styles.menuLink}>
+            <Link href="/signin" className={styles.menuLink} onClick={handleMenuClick}>
               Войти
             </Link>
           </li>
@@ -63,4 +70,5 @@ export default function Navigation() {
     </nav>
   );
 }
+
 
