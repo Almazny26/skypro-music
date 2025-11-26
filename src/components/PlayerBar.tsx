@@ -26,6 +26,7 @@ export default function PlayerBar({ isLiked, isShuffled, onPlayPause, onNextTrac
   const [duration, setDuration] = useState(0);
   const [isLooping, setIsLooping] = useState(false);
   const lastPrevClickTime = useRef<number>(0);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Обновление источника аудио при смене трека
   useEffect(() => {
@@ -63,7 +64,7 @@ export default function PlayerBar({ isLiked, isShuffled, onPlayPause, onNextTrac
     } else {
       audio.pause();
     }
-  }, [isPlaying]);
+  }, [isPlaying, currentTrack]);
 
   // Управление зацикливанием через свойство loop аудиоэлемента
   useEffect(() => {
@@ -165,12 +166,27 @@ export default function PlayerBar({ isLiked, isShuffled, onPlayPause, onNextTrac
       }
       lastPrevClickTime.current = now;
       
+      // Очищаем предыдущий таймер, если он существует
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      
       // Сбрасываем таймер через 3 секунды
-      setTimeout(() => {
+      timeoutRef.current = setTimeout(() => {
         lastPrevClickTime.current = 0;
+        timeoutRef.current = null;
       }, REWIND_THRESHOLD);
     }
   };
+
+  // Очистка таймера при размонтировании компонента
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   // Вычисление процента прогресса
   const progressPercentage = duration > 0 ? (currentTime / duration) * 100 : 0;

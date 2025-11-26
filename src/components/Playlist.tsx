@@ -43,26 +43,44 @@ export default function Playlist({ tracks, likedTracks, onTrackSelect, onToggleL
 
   // Загрузка реальной длительности треков из аудио файлов
   useEffect(() => {
+    let cancelled = false;
+    const audioElements: HTMLAudioElement[] = [];
+    
     const loadDurations = async () => {
       const durations = new Map<number, number>();
       
       // Загружаем метаданные для каждого трека
       const promises = tracks.map((track) => {
         return new Promise<void>((resolve) => {
-          const audio = new Audio();
+          if (cancelled) {
+            resolve();
+            return;
+          }
           
-          audio.addEventListener('loadedmetadata', () => {
-            if (isFinite(audio.duration) && !isNaN(audio.duration) && audio.duration > 0) {
+          const audio = new Audio();
+          audioElements.push(audio);
+          
+          const handleLoadedMetadata = () => {
+            if (!cancelled && isFinite(audio.duration) && !isNaN(audio.duration) && audio.duration > 0) {
               durations.set(track._id, audio.duration);
             }
+            audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+            audio.removeEventListener('error', handleError);
             resolve();
-          });
+          };
           
-          audio.addEventListener('error', () => {
-            // Если не удалось загрузить, используем значение из данных
-            durations.set(track._id, track.duration_in_seconds);
+          const handleError = () => {
+            if (!cancelled) {
+              // Если не удалось загрузить, используем значение из данных
+              durations.set(track._id, track.duration_in_seconds);
+            }
+            audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+            audio.removeEventListener('error', handleError);
             resolve();
-          });
+          };
+          
+          audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+          audio.addEventListener('error', handleError);
           
           // Устанавливаем preload для загрузки только метаданных
           audio.preload = 'metadata';
@@ -71,10 +89,23 @@ export default function Playlist({ tracks, likedTracks, onTrackSelect, onToggleL
       });
       
       await Promise.all(promises);
-      setTrackDurations(durations);
+      
+      if (!cancelled) {
+        setTrackDurations(durations);
+      }
     };
 
     loadDurations();
+
+    // Очистка: останавливаем загрузку всех аудио элементов при размонтировании или изменении tracks
+    return () => {
+      cancelled = true;
+      // Останавливаем загрузку всех аудио элементов
+      audioElements.forEach((audio) => {
+        audio.src = '';
+        audio.load();
+      });
+    };
   }, [tracks]);
   return (
     <div className={styles.content}>
