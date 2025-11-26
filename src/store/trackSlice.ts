@@ -1,6 +1,6 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
-interface Track {
+export interface Track {
   _id: number;
   name: string;
   author: string;
@@ -18,6 +18,7 @@ interface TrackState {
   isPlaying: boolean;
   currentTime: number;
   duration: number;
+  playlist: Track[];
 }
 
 const initialState: TrackState = {
@@ -25,6 +26,7 @@ const initialState: TrackState = {
   isPlaying: false,
   currentTime: 0,
   duration: 0,
+  playlist: [],
 };
 
 const trackSlice = createSlice({
@@ -48,6 +50,9 @@ const trackSlice = createSlice({
     setDuration: (state, action: PayloadAction<number>) => {
       state.duration = action.payload;
     },
+    setPlaylist: (state, action: PayloadAction<Track[]>) => {
+      state.playlist = action.payload;
+    },
   },
 });
 
@@ -57,5 +62,6 @@ export const {
   togglePlayPause,
   setCurrentTime,
   setDuration,
+  setPlaylist,
 } = trackSlice.actions;
 export default trackSlice.reducer;
