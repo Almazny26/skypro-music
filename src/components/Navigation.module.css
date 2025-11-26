@@ -1,0 +1,109 @@
+.nav {
+  width: 244px;
+  background-color: #181818;
+  padding: 20px 0 20px 36px;
+}
+
+.logo {
+  width: 113.33px;
+  height: 43px;
+  padding: 13px 0 13px 0;
+  background-color: transparent;
+  margin-bottom: 20px;
+}
+
+.logoImage {
+  width: 113.33px;
+  height: 17px;
+  color: #181818;
+}
+
+.burger {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  position: relative;
+}
+
+.burgerLine {
+  display: block;
+  width: 100%;
+  height: 2px;
+  background-color: #d3d3d3;
+  transition: transform 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55), opacity 0.3s ease;
+  transform-origin: center;
+  position: absolute;
+}
+
+/* Позиционирование линий в закрытом состоянии */
+.burgerLine:first-child {
+  top: 3px;
+}
+
+.burgerLine:nth-child(2) {
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.burgerLine:last-child {
+  bottom: 3px;
+}
+
+/* Анимация для первой линии (верхняя) - поворачивается и смещается в центр */
+.burgerOpen .burgerLine:first-child {
+  top: 50%;
+  transform: translateY(-50%) rotate(45deg);
+}
+
+/* Анимация для второй линии (средняя) - исчезает */
+.burgerOpen .burgerLine:nth-child(2) {
+  opacity: 0;
+  transform: translateY(-50%) scaleX(0);
+}
+
+/* Анимация для третьей линии (нижняя) - поворачивается и смещается в центр */
+.burgerOpen .burgerLine:last-child {
+  bottom: auto;
+  top: 50%;
+  transform: translateY(-50%) rotate(-45deg);
+}
+
+.menu {
+  max-height: 500px;
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  transition: max-height 0.4s ease, opacity 0.4s ease, visibility 0.4s ease, transform 0.4s ease;
+  overflow: hidden;
+}
+
+.menuClosed {
+  max-height: 0;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-20px);
+  transition: max-height 0.4s ease, opacity 0.4s ease, visibility 0.4s ease, transform 0.4s ease;
+}
+
+.menuList {
+  padding: 18px 0 10px 0;
+}
+
+.menuItem {
+  padding: 5px 0;
+  margin-bottom: 16px;
+}
+
+.menuLink {
+  color: #ffffff;
+  font-weight: 400;
+  font-size: 16px;
+  line-height: 24px;
+  text-decoration: none;
+}
+
