@@ -94,7 +94,11 @@ export default function Home() {
     // Для предыдущего трека используем порядок текущего плейлиста
     const currentIndex = filteredTracks.findIndex(track => track._id === currentTrack._id);
     if (currentIndex !== -1) {
-      const prevIndex = currentIndex === 0 ? filteredTracks.length - 1 : currentIndex - 1;
+      // Если текущий трек - первый в плейлисте, не переключаем
+      if (currentIndex === 0) {
+        return null;
+      }
+      const prevIndex = currentIndex - 1;
       return filteredTracks[prevIndex];
     }
     return null;
