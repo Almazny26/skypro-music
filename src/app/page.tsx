@@ -45,17 +45,26 @@ export default function Home() {
     }
   };
 
+  // Фильтрация треков по поисковому запросу
+  const filteredTracks = searchQuery
+    ? data.filter(track => 
+        track.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        track.author.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        track.album.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : data;
+
   const getNextTrack = (): typeof data[0] | null => {
     if (!currentTrack) return null;
 
     if (isShuffled) {
-      // Режим перемешивания: выбираем случайный трек, который еще не был воспроизведен
-      const unplayedTracks = data.filter(track => !playedTracks.includes(track._id));
+      // Режим перемешивания: выбираем случайный трек из текущего плейлиста, который еще не был воспроизведен
+      const unplayedTracks = filteredTracks.filter(track => !playedTracks.includes(track._id));
       
       // Если все треки были воспроизведены, сбрасываем список
       if (unplayedTracks.length === 0) {
         setPlayedTracks([currentTrack._id]);
-        const availableTracks = data.filter(track => track._id !== currentTrack._id);
+        const availableTracks = filteredTracks.filter(track => track._id !== currentTrack._id);
         if (availableTracks.length === 0) return null;
         const randomTrack = availableTracks[Math.floor(Math.random() * availableTracks.length)];
         return randomTrack;
@@ -65,11 +74,15 @@ export default function Home() {
       const randomTrack = unplayedTracks[Math.floor(Math.random() * unplayedTracks.length)];
       return randomTrack;
     } else {
-      // Обычный режим: следующий трек по порядку
-      const currentIndex = data.findIndex(track => track._id === currentTrack._id);
+      // Обычный режим: следующий трек по порядку из текущего плейлиста
+      const currentIndex = filteredTracks.findIndex(track => track._id === currentTrack._id);
       if (currentIndex !== -1) {
-        const nextIndex = (currentIndex + 1) % data.length;
-        return data[nextIndex];
+        // Если текущий трек - последний в плейлисте, не переключаем
+        if (currentIndex === filteredTracks.length - 1) {
+          return null;
+        }
+        const nextIndex = currentIndex + 1;
+        return filteredTracks[nextIndex];
       }
     }
     return null;
@@ -78,11 +91,11 @@ export default function Home() {
   const getPrevTrack = (): typeof data[0] | null => {
     if (!currentTrack) return null;
     
-    // Для предыдущего трека всегда используем порядок списка
-    const currentIndex = data.findIndex(track => track._id === currentTrack._id);
+    // Для предыдущего трека используем порядок текущего плейлиста
+    const currentIndex = filteredTracks.findIndex(track => track._id === currentTrack._id);
     if (currentIndex !== -1) {
-      const prevIndex = currentIndex === 0 ? data.length - 1 : currentIndex - 1;
-      return data[prevIndex];
+      const prevIndex = currentIndex === 0 ? filteredTracks.length - 1 : currentIndex - 1;
+      return filteredTracks[prevIndex];
     }
     return null;
   };
@@ -136,15 +149,6 @@ export default function Home() {
   const handleSearchChange = (query: string) => {
     setSearchQuery(query);
   };
-
-  // Фильтрация треков по поисковому запросу
-  const filteredTracks = searchQuery
-    ? data.filter(track => 
-        track.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        track.author.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        track.album.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : data;
 
   return (
     <div className={styles.wrapper}>
