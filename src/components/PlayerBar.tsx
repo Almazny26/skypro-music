@@ -25,6 +25,7 @@ export default function PlayerBar({ isLiked, isShuffled, onPlayPause, onNextTrac
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isLooping, setIsLooping] = useState(false);
+  const lastPrevClickTime = useRef<number>(0);
 
   // Обновление источника аудио при смене трека
   useEffect(() => {
@@ -38,6 +39,8 @@ export default function PlayerBar({ isLiked, isShuffled, onPlayPause, onNextTrac
       audio.load(); // Загружаем новый источник
       setCurrentTime(0);
       dispatch(setCurrentTimeAction(0));
+      // Сбрасываем таймер последнего клика при смене трека
+      lastPrevClickTime.current = 0;
     }
   }, [currentTrack, dispatch]);
 
@@ -140,6 +143,35 @@ export default function PlayerBar({ isLiked, isShuffled, onPlayPause, onNextTrac
     dispatch(setCurrentTimeAction(newTime));
   };
 
+  // Обработчик кнопки "Предыдущий трек" с классической логикой
+  const handlePrevTrack = () => {
+    if (!currentTrack) return;
+
+    const audio = audioRef.current;
+    const now = Date.now();
+    const timeSinceLastClick = now - lastPrevClickTime.current;
+    const REWIND_THRESHOLD = 3000; // 3 секунды
+
+    // Если трек уже в начале или прошло меньше 3 секунд с последнего клика - переключаем на предыдущий
+    if (currentTime < 3 || (timeSinceLastClick < REWIND_THRESHOLD && lastPrevClickTime.current > 0)) {
+      lastPrevClickTime.current = 0; // Сбрасываем таймер
+      onPrevTrack();
+    } else {
+      // Перематываем текущий трек в начало
+      if (audio) {
+        audio.currentTime = 0;
+        setCurrentTime(0);
+        dispatch(setCurrentTimeAction(0));
+      }
+      lastPrevClickTime.current = now;
+      
+      // Сбрасываем таймер через 3 секунды
+      setTimeout(() => {
+        lastPrevClickTime.current = 0;
+      }, REWIND_THRESHOLD);
+    }
+  };
+
   // Вычисление процента прогресса
   const progressPercentage = duration > 0 ? (currentTime / duration) * 100 : 0;
 
@@ -181,7 +213,7 @@ export default function PlayerBar({ isLiked, isShuffled, onPlayPause, onNextTrac
               {/* Кнопка "Предыдущий трек" */}
               <div 
                 className={`${styles.btnPrev} ${styles.btn}`}
-                onClick={currentTrack ? onPrevTrack : undefined}
+                onClick={currentTrack ? handlePrevTrack : undefined}
                 style={{ cursor: currentTrack ? 'pointer' : 'default', opacity: currentTrack ? 1 : 0.5 }}
               >
                 <svg className={styles.btnPrevSvg}>
