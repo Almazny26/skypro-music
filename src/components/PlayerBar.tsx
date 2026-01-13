@@ -5,6 +5,7 @@ import { useAppSelector, useAppDispatch } from '@/store/hooks';
 import {
   setCurrentTime as setCurrentTimeAction,
   setDuration as setDurationAction,
+  setIsPlaying,
 } from '@/store/trackSlice';
 import styles from './PlayerBar.module.css';
 
@@ -42,6 +43,8 @@ export default function PlayerBar({
   const lastPrevClickTime = useRef<number>(0);
   // Храним ID таймера чтобы можно было его очистить
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Флаг для отслеживания, воспроизводится ли трек (чтобы избежать конфликтов)
+  const isPlayingRef = useRef<boolean>(false);
 
   // Когда меняется текущий трек, обновляем источник аудио
   useEffect(() => {
@@ -49,38 +52,113 @@ export default function PlayerBar({
     if (!audio) return; // если элемент еще не создан, выходим
 
     if (currentTrack) {
+      // Проверяем, не тот ли это уже трек (чтобы не перезагружать)
+      const currentSrc = audio.src || '';
+      const trackUrl = currentTrack.track_file;
+      // Сравниваем URL (могут быть разные форматы - с http/https, с trailing slash и т.д.)
+      if (currentSrc && (currentSrc === trackUrl || currentSrc.endsWith(trackUrl) || trackUrl.endsWith(currentSrc)) && currentSrc !== window.location.href) {
+        return; // Трек уже загружен, ничего не делаем
+      }
+
       // Останавливаем текущее воспроизведение если что-то играло
       audio.pause();
-      // Устанавливаем новый источник
-      audio.src = currentTrack.track_file;
-      audio.load(); // принудительно загружаем новый трек
-      // Сбрасываем время на 0
+      // Сбрасываем время на 0 перед загрузкой нового трека
       setCurrentTime(0);
       dispatch(setCurrentTimeAction(0)); // обновляем в Redux тоже
+      // Сбрасываем длительность
+      setDuration(0);
+      dispatch(setDurationAction(0));
+      // Устанавливаем новый источник - используем полный URL
+      audio.src = currentTrack.track_file;
+      // Устанавливаем preload для загрузки метаданных
+      audio.preload = 'auto';
       // Сбрасываем таймер для кнопки "назад"
       lastPrevClickTime.current = 0;
+      // Загружаем трек - воспроизведение будет управляться через useEffect для isPlaying
+      audio.load();
+    } else {
+      // Если трек не выбран, очищаем источник правильно
+      audio.pause();
+      audio.removeAttribute('src');
+      audio.load(); // это очистит источник
+      setCurrentTime(0);
+      dispatch(setCurrentTimeAction(0));
+      setDuration(0);
+      dispatch(setDurationAction(0));
+      isPlayingRef.current = false;
     }
   }, [currentTrack, dispatch]);
 
   // Управляем play/pause когда меняется isPlaying
   useEffect(() => {
     const audio = audioRef.current;
-    if (!audio || !currentTrack) return;
+    if (!audio || !currentTrack) {
+      isPlayingRef.current = false;
+      return;
+    }
 
+    // Обновляем ref
+    isPlayingRef.current = isPlaying;
+
+    // Проверяем, что аудио готово к воспроизведению
     if (isPlaying) {
-      // Проверяем готовность аудио перед воспроизведением
-      // readyState >= 2 означает что есть достаточно данных для начала воспроизведения
-      if (audio.readyState >= 2) {
-        audio.play().catch((error) => {
-          // Игнорируем ошибки в продакшене, только в разработке показываем
-          if (process.env.NODE_ENV === 'development') {
-            console.error('Ошибка воспроизведения:', error);
-          }
-        });
+      // Проверяем, не играет ли уже (только если действительно играет)
+      if (!audio.paused && audio.readyState >= 2) {
+        return; // Уже играет, ничего не делаем
       }
+
+      // Ждем, пока аудио будет готово к воспроизведению
+      const tryPlay = () => {
+        // Проверяем, что трек все еще текущий и должен играть
+        if (!isPlayingRef.current || !currentTrack) return;
+        
+        // Проверяем, что источник совпадает с текущим треком
+        const currentSrc = audio.src || '';
+        const trackUrl = currentTrack.track_file;
+        const srcMatches = currentSrc === trackUrl || currentSrc.endsWith(trackUrl) || trackUrl.endsWith(currentSrc);
+        if (!srcMatches) return;
+        
+        if (audio.readyState >= 2) { // HAVE_CURRENT_DATA или выше
+          const playPromise = audio.play();
+          if (playPromise !== undefined) {
+            playPromise
+              .then(() => {
+                // Успешно запущено
+                isPlayingRef.current = true;
+              })
+              .catch((error) => {
+                // Игнорируем AbortError - это нормально при переключении треков
+                if (error.name !== 'AbortError' && process.env.NODE_ENV === 'development') {
+                  console.error('Ошибка воспроизведения:', error);
+                }
+                isPlayingRef.current = false;
+              });
+          }
+        }
+      };
+
+      // Пытаемся сразу, если готово
+      tryPlay();
+      
+      // Если еще не готово, подписываемся на canplay
+      const handleCanPlayForPlay = () => {
+        tryPlay();
+        audio.removeEventListener('canplay', handleCanPlayForPlay);
+      };
+      
+      if (audio.readyState < 2) {
+        audio.addEventListener('canplay', handleCanPlayForPlay);
+      }
+      
+      return () => {
+        audio.removeEventListener('canplay', handleCanPlayForPlay);
+      };
     } else {
       // Если isPlaying false - ставим на паузу
-      audio.pause();
+      if (!audio.paused) {
+        audio.pause();
+      }
+      isPlayingRef.current = false;
     }
   }, [isPlaying, currentTrack]);
 
@@ -107,23 +185,114 @@ export default function PlayerBar({
     // Когда загрузились метаданные (длительность трека)
     const handleLoadedMetadata = () => {
       const dur = audio.duration;
-      setDuration(dur);
-      dispatch(setDurationAction(dur));
+      if (isFinite(dur) && !isNaN(dur) && dur > 0) {
+        setDuration(dur);
+        dispatch(setDurationAction(dur));
+      }
     };
 
     // Когда аудио готово к воспроизведению
     const handleCanPlay = () => {
-      // Если трек должен играть, начинаем воспроизведение
-      if (isPlaying && currentTrack) {
-        audio.play().catch((error) => {
-          // AbortError можно игнорировать - это когда загрузка прервалась
-          if (
-            error.name !== 'AbortError' &&
-            process.env.NODE_ENV === 'development'
-          ) {
-            console.error('Ошибка воспроизведения:', error);
+      // Проверяем, что трек все еще текущий
+      if (!currentTrack) return;
+      
+      // Нормализуем URL для сравнения
+      const currentSrc = audio.src || '';
+      const trackUrl = currentTrack.track_file;
+      const srcMatches = currentSrc === trackUrl || currentSrc.endsWith(trackUrl) || trackUrl.endsWith(currentSrc);
+      
+      if (!srcMatches) return; // Это не наш трек
+      
+      // Если трек должен играть и аудио готово, начинаем воспроизведение
+      // Используем isPlayingRef.current для актуального значения
+      if (isPlayingRef.current && audio.readyState >= 2 && audio.paused) {
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              isPlayingRef.current = true;
+            })
+            .catch((error) => {
+              // AbortError можно игнорировать - это когда загрузка прервалась
+              if (
+                error.name !== 'AbortError' &&
+                process.env.NODE_ENV === 'development'
+              ) {
+                console.error('Ошибка воспроизведения в canplay:', error);
+              }
+              isPlayingRef.current = false;
+            });
+        }
+      }
+    };
+
+    // Обработка ошибок загрузки
+    const handleError = (e: Event) => {
+      const audio = e.target as HTMLAudioElement;
+      if (audio.error) {
+        // Коды ошибок:
+        // 1 = MEDIA_ERR_ABORTED - загрузка прервана
+        // 2 = MEDIA_ERR_NETWORK - ошибка сети
+        // 3 = MEDIA_ERR_DECODE - ошибка декодирования
+        // 4 = MEDIA_ERR_SRC_NOT_SUPPORTED - формат не поддерживается
+        const errorMessages = {
+          1: 'Загрузка прервана',
+          2: 'Ошибка сети. Проверьте подключение к интернету',
+          3: 'Ошибка декодирования аудио',
+          4: 'Формат аудио не поддерживается',
+        };
+        const errorCode = audio.error.code;
+        const errorMessage = errorMessages[errorCode as keyof typeof errorMessages] || 'Неизвестная ошибка';
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Ошибка загрузки аудио:', {
+            code: errorCode,
+            message: errorMessage,
+            src: audio.src,
+            error: audio.error,
+          });
+        }
+        
+        // Если произошла ошибка, сбрасываем состояние воспроизведения
+        dispatch(setIsPlaying(false));
+        isPlayingRef.current = false;
+        
+        // Показываем предупреждение только для критических ошибок (не для прерванной загрузки)
+        if (errorCode !== 1 && process.env.NODE_ENV === 'development') {
+          console.warn(`Не удалось загрузить трек: ${errorMessage}`);
+        }
+      }
+    };
+
+    // Обработчик события pause - НЕ используем, чтобы избежать конфликтов
+    // Мы управляем паузой через isPlaying в Redux
+    
+    // Обработчик события play - обновляем ref когда аудио начинает играть
+    const handlePlay = () => {
+      if (!audio.paused) {
+        isPlayingRef.current = true;
+      }
+    };
+
+    // Обработчик события waiting - когда трек останавливается из-за нехватки данных
+    const handleWaiting = () => {
+      // Если трек должен играть, но остановился из-за нехватки данных,
+      // ждем когда данные загрузятся и продолжаем
+      if (isPlayingRef.current) {
+        const handleCanPlayAfterWaiting = () => {
+          if (isPlayingRef.current && audio.paused && audio.readyState >= 2) {
+            const playPromise = audio.play();
+            if (playPromise !== undefined) {
+              playPromise.catch((error) => {
+                if (error.name !== 'AbortError' && process.env.NODE_ENV === 'development') {
+                  console.error('Ошибка воспроизведения после waiting:', error);
+                }
+              });
+            }
           }
-        });
+          audio.removeEventListener('canplay', handleCanPlayAfterWaiting);
+        };
+        audio.addEventListener('canplay', handleCanPlayAfterWaiting);
       }
     };
 
@@ -131,12 +300,18 @@ export default function PlayerBar({
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
     audio.addEventListener('canplay', handleCanPlay);
+    audio.addEventListener('error', handleError);
+    audio.addEventListener('play', handlePlay);
+    audio.addEventListener('waiting', handleWaiting);
 
     // Cleanup - обязательно удаляем обработчики при размонтировании
     return () => {
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('canplay', handleCanPlay);
+      audio.removeEventListener('error', handleError);
+      audio.removeEventListener('play', handlePlay);
+      audio.removeEventListener('waiting', handleWaiting);
     };
   }, [currentTrack, isPlaying, dispatch]);
 
@@ -276,10 +451,9 @@ export default function PlayerBar({
                 className={`${styles.btnPlay} ${styles.btn} ${styles.btnIcon} ${
                   isPlaying ? styles.active : ''
                 }`}
-                onClick={currentTrack ? onPlayPause : undefined}
+                onClick={onPlayPause}
                 style={{
-                  cursor: currentTrack ? 'pointer' : 'default',
-                  opacity: currentTrack ? 1 : 0.5,
+                  cursor: 'pointer',
                 }}
               >
                 <svg className={styles.btnPlaySvg}>

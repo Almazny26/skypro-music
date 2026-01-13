@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import classNames from 'classnames';
 import styles from './Filter.module.css';
-import { data } from '../../data';
+import { data } from '@/data';
 
 // Типы для фильтров
 type FilterType = 'author' | 'year' | 'genre' | null;
