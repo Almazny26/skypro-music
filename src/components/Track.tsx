@@ -2,8 +2,7 @@
 
 import styles from './Track.module.css';
 
-// Интерфейс для пропсов компонента Track
-// Определяет какие данные нужны для отображения одного трека
+// Описываю какие пропсы принимает компонент Track
 interface TrackProps {
   track: {
     _id: number;
@@ -13,33 +12,34 @@ interface TrackProps {
     duration_in_seconds: number;
     track_file: string;
   };
-  duration: string; // Длительность трека (например, "4:44")
-  subtitle?: string; // Дополнительная информация (опционально, например "(Remix)")
-  isActive?: boolean; // Флаг активного трека
-  isPlaying?: boolean; // Флаг воспроизведения трека
-  isLiked?: boolean; // Флаг лайкнутого трека
-  onSelect: (track: TrackProps['track']) => void; // Обработчик выбора трека
-  onToggleLike: () => void; // Обработчик переключения лайка
+  duration: string; // длительность в формате "4:44" (уже отформатированная)
+  subtitle?: string; // опциональное поле, например "(Remix)"
+  isActive?: boolean; // является ли этот трек текущим
+  isPlaying?: boolean; // играет ли сейчас этот трек
+  isLiked?: boolean; // лайкнут ли трек
+  onSelect: (track: TrackProps['track']) => void; // функция которая вызывается при клике на трек
+  onToggleLike: () => void; // функция для переключения лайка
 }
 
-// Компонент одного трека в списке
-// Принимает данные о треке через пропсы и отображает их
+// Компонент для отображения одного трека в списке
 export default function Track({
   track,
   duration,
   subtitle,
-  isActive = false,
+  isActive = false, // по умолчанию не активен
   isPlaying = false,
   isLiked = false,
   onSelect,
   onToggleLike,
 }: TrackProps) {
+  // Обработчик клика на весь трек
   const handleClick = () => {
-    onSelect(track);
+    onSelect(track); // передаем трек в родительский компонент
   };
 
+  // Обработчик клика на иконку лайка
   const handleLikeClick = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Предотвращаем всплытие события, чтобы не запускать трек
+    e.stopPropagation(); // останавливаем всплытие события, чтобы не запускался трек при клике на лайк
     onToggleLike();
   };
 
@@ -53,7 +53,7 @@ export default function Track({
         {/* Блок с названием трека и иконкой */}
         <div className={styles.title}>
           <div className={styles.titleImage}>
-            {/* Если трек активен, показываем фиолетовую точку, иначе иконку ноты */}
+            {/* Если трек активен - показываем точку (анимированную если играет), иначе иконку ноты */}
             {isActive ? (
               <span className={`${styles.playingDot} ${isPlaying ? styles.playingDotAnimated : ''}`}></span>
             ) : (

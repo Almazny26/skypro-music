@@ -3,7 +3,7 @@
   bottom: 0;
   left: 0;
   width: 100%;
-  background: rgba(28, 28, 28, 0.5);
+  background: rgba(28, 28, 28, 0.95);
 }
 
 .content {
@@ -23,6 +23,44 @@
   height: 100%;
   background: #b672ff;
   transition: width 0.1s linear;
+}
+
+.timeContainer {
+  display: flex;
+  align-items: center;
+  margin-right: 17px;
+  width: 110px;
+}
+
+.timeText {
+  font-style: normal;
+  font-weight: 400;
+  font-size: 16px;
+  line-height: 24px;
+  color: #696969;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 0px;
+  width: 100%;
+  justify-content: center;
+}
+
+.timeTextPart {
+  display: inline-block;
+  min-width: 35px;
+  text-align: right;
+}
+
+.timeTextPart:first-child {
+  padding-right: 4px;
+}
+
+.timeTextSeparator {
+  display: inline-block;
+  width: auto;
+  text-align: center;
+  padding: 0 2px;
 }
 
 .playerBlock {

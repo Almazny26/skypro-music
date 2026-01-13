@@ -90,6 +90,7 @@
 .time {
   display: flex;
   align-items: center;
+  min-width: 50px;
 }
 
 .timeSvg {
@@ -99,6 +100,7 @@
   fill: transparent;
   stroke: #696969;
   transition: fill 0.2s ease, stroke 0.2s ease;
+  flex-shrink: 0;
 }
 
 .timeSvg:hover {
@@ -118,6 +120,8 @@
   line-height: 24px;
   text-align: right;
   color: #696969;
+  min-width: 50px;
+  display: inline-block;
 }
 
 .itemActive {
