@@ -5,14 +5,62 @@ import styles from './signin.module.css';
 import classNames from 'classnames';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { login, setToken, setUserInfo } from '@/api/api';
 
 // Страница входа в систему
-// Пока только форма без функционала авторизации
 export default function Signin() {
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const router = useRouter();
+  const [error, setError] = useState<string>('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    // TODO: Реализовать логику авторизации
-    alert('Еще не реализовано');
+    setError('');
+    setIsLoading(true);
+
+    const formData = new FormData(e.currentTarget);
+    const loginValue = formData.get('login') as string;
+    const password = formData.get('password') as string;
+
+    if (!loginValue || !password) {
+      setError('Заполните все поля');
+      setIsLoading(false);
+      return;
+    }
+
+    // Проверка длины пароля
+    if (password.length < 6) {
+      setError('Пароль должен содержать минимум 6 символов');
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      // Определяем, является ли значение email или username
+      // Если содержит @, считаем email, иначе username
+      const isEmail = loginValue.includes('@');
+      const credentials = isEmail
+        ? { email: loginValue, password }
+        : { username: loginValue, password };
+      
+      const response = await login(credentials);
+      setToken(response.access);
+      setUserInfo(response.username, response.email);
+      // Небольшая задержка, чтобы токен успел сохраниться
+      setTimeout(() => {
+        router.push('/');
+        router.refresh();
+      }, 100);
+    } catch (err) {
+      console.error('Ошибка авторизации:', err);
+      setError(
+        err instanceof Error ? err.message : 'Произошла ошибка при входе'
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -52,11 +100,19 @@ export default function Signin() {
               required
             />
 
-            {/* Блок для отображения ошибок валидации (пока пустой) */}
-            <div className={styles.errorContainer}>{/*Блок для ошибок*/}</div>
+            {/* Блок для отображения ошибок валидации */}
+            {error && (
+              <div className={styles.errorContainer}>{error}</div>
+            )}
 
             {/* Кнопка входа */}
-            <button type="submit" className={styles.modalBtnEnter}>Войти</button>
+            <button
+              type="submit"
+              className={styles.modalBtnEnter}
+              disabled={isLoading}
+            >
+              {isLoading ? 'Вход...' : 'Войти'}
+            </button>
 
             {/* Ссылка на страницу регистрации */}
             <Link href="/signup" className={styles.modalBtnSignup}>

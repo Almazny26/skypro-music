@@ -4,15 +4,33 @@
 import Image from 'next/image';
 import Link from 'next/link';
 // Импортируем React хуки для управления состоянием
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 // Импортируем CSS модуль для стилизации этого компонента
 import styles from './Navigation.module.css';
+import { getToken, removeToken } from '@/api/api';
 
 // Компонент навигации - левая боковая панель с логотипом и меню
 export default function Navigation() {
+  const router = useRouter();
   // Состояние для отслеживания открыто/закрыто меню
   // При обновлении страницы меню скрыто
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  // Проверяем авторизацию при загрузке и при изменении
+  useEffect(() => {
+    const checkAuth = () => {
+      const token = getToken();
+      setIsAuthenticated(!!token);
+    };
+    
+    checkAuth();
+    // Проверяем каждую секунду (на случай если токен изменился в другом месте)
+    const interval = setInterval(checkAuth, 1000);
+    
+    return () => clearInterval(interval);
+  }, []);
 
   // Обработчик клика на бургер-меню
   const handleBurgerClick = () => {
@@ -23,6 +41,14 @@ export default function Navigation() {
   const handleMenuClick = (e: React.MouseEvent) => {
     e.preventDefault();
     alert('Еще не реализовано');
+  };
+
+  // Обработчик выхода
+  const handleLogout = (e: React.MouseEvent) => {
+    e.preventDefault();
+    removeToken();
+    setIsAuthenticated(false);
+    router.push('/signin');
   };
 
   return (
@@ -51,7 +77,7 @@ export default function Navigation() {
         <ul className={styles.menuList}>
           <li className={styles.menuItem}>
             {/* Link из Next.js обеспечивает клиентскую навигацию без перезагрузки страницы */}
-            <Link href="/" className={styles.menuLink} onClick={handleMenuClick}>
+            <Link href="/" className={styles.menuLink}>
               Главное
             </Link>
           </li>
@@ -61,9 +87,15 @@ export default function Navigation() {
             </Link>
           </li>
           <li className={styles.menuItem}>
-            <Link href="/signin" className={styles.menuLink} onClick={handleMenuClick}>
-              Войти
-            </Link>
+            {isAuthenticated ? (
+              <Link href="#" className={styles.menuLink} onClick={handleLogout}>
+                Выйти
+              </Link>
+            ) : (
+              <Link href="/signin" className={styles.menuLink}>
+                Войти
+              </Link>
+            )}
           </li>
         </ul>
       </div>

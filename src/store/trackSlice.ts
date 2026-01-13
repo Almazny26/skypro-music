@@ -1,18 +1,8 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import type { Track } from '@/api/api';
 
-// Описываю структуру трека - все поля которые приходят с бэкенда
-export interface Track {
-  _id: number;
-  name: string;
-  author: string;
-  album: string;
-  duration_in_seconds: number;
-  track_file: string;
-  release_date?: string; // необязательное поле, может не быть
-  genre?: string[];
-  logo?: string | null;
-  stared_user?: number[];
-}
+// Экспортируем тип Track из API для использования в других частях приложения
+export type { Track };
 
 // Состояние для Redux - что храним в store
 interface TrackState {

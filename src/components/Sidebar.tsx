@@ -1,11 +1,50 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import styles from './Sidebar.module.css';
+import { getUsername } from '@/api/api';
 
 // Компонент правой боковой панели
 // Показывает информацию о пользователе и коллекцию плейлистов
 export default function Sidebar() {
+  const [username, setUsername] = useState<string>('');
+
+  useEffect(() => {
+    // Функция для обновления username
+    const updateUsername = () => {
+      const currentUsername = getUsername();
+      setUsername(currentUsername || '');
+    };
+
+    // Проверяем при монтировании
+    updateUsername();
+
+    // Слушаем изменения в localStorage (событие storage срабатывает при изменении в других вкладках)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'username') {
+        updateUsername();
+      }
+    };
+
+    // Также слушаем изменения в текущей вкладке через кастомное событие
+    const handleCustomStorageChange = () => {
+      updateUsername();
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    // Добавляем слушатель для обновления при фокусе окна
+    window.addEventListener('focus', updateUsername);
+    // Слушаем кастомное событие для обновления в той же вкладке
+    window.addEventListener('localStorageChange', handleCustomStorageChange);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('focus', updateUsername);
+      window.removeEventListener('localStorageChange', handleCustomStorageChange);
+    };
+  }, []);
+
   const handlePlaylistClick = (e: React.MouseEvent) => {
     e.preventDefault();
     alert('Еще не реализовано');
@@ -15,7 +54,7 @@ export default function Sidebar() {
     <div className={styles.sidebar}>
       {/* Блок с информацией о пользователе */}
       <div className={styles.personal}>
-        <p className={styles.personalName}>Sergey.Ivanov</p>
+        <p className={styles.personalName}>{username || 'Гость'}</p>
         {/* Аватар пользователя */}
         <div className={styles.avatar}>
           <svg className={styles.avatarIcon} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">

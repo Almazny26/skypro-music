@@ -1,17 +1,28 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import { useAppDispatch } from '@/store/hooks';
+import { setPlaylist } from '@/store/trackSlice';
 import classNames from 'classnames';
 import styles from './Filter.module.css';
-import { data } from '@/data';
+import type { Track } from '@/api/api';
 
 // Типы для фильтров
 type FilterType = 'author' | 'year' | 'genre' | null;
 
+interface FilterProps {
+  tracks?: Track[];
+}
+
 // Компонент фильтров - кнопки для фильтрации треков
-export default function Filter() {
+export default function Filter({ tracks = [] }: FilterProps) {
+  const dispatch = useAppDispatch();
   // Состояние для отслеживания открытого фильтра (null - ничего не открыто)
   const [openFilter, setOpenFilter] = useState<FilterType>(null);
+  const [activeFilter, setActiveFilter] = useState<{
+    type: FilterType;
+    value: string | number | null;
+  }>({ type: null, value: null });
 
   // Извлекаем уникальные значения из данных треков
   const { uniqueAuthors, uniqueGenres, uniqueYears } = useMemo(() => {
@@ -19,14 +30,24 @@ export default function Filter() {
     const genres = new Set<string>();
     const years = new Set<number>();
 
-    data.forEach((track) => {
+    if (!tracks || !Array.isArray(tracks)) {
+      return {
+        uniqueAuthors: [],
+        uniqueGenres: [],
+        uniqueYears: [],
+      };
+    }
+
+    tracks.forEach((track) => {
       // Добавляем автора (если не пустой)
       if (track.author && track.author !== '-') {
         authors.add(track.author);
       }
 
       // Добавляем жанры (из массива)
-      track.genre.forEach((g) => genres.add(g));
+      if (track.genre) {
+        track.genre.forEach((g) => genres.add(g));
+      }
 
       // Извлекаем год из даты выпуска
       if (track.release_date) {
@@ -42,7 +63,7 @@ export default function Filter() {
       uniqueGenres: Array.from(genres).sort(),
       uniqueYears: Array.from(years).sort((a, b) => b - a), // Сортируем по убыванию
     };
-  }, []);
+  }, [tracks]);
 
   // Обработчик клика на кнопку фильтра
   const handleFilterClick = (filterType: 'author' | 'year' | 'genre') => {
@@ -56,10 +77,39 @@ export default function Filter() {
   };
 
   // Обработчик выбора значения фильтра
-  const handleFilterSelect = (filterType: 'author' | 'year' | 'genre', value: string | number) => {
-    // TODO: Реализовать логику фильтрации треков
-    alert(`Еще не реализовано: Фильтр по ${filterType === 'author' ? 'исполнителю' : filterType === 'year' ? 'году' : 'жанру'} - ${value}`);
+  const handleFilterSelect = (
+    filterType: 'author' | 'year' | 'genre',
+    value: string | number
+  ) => {
+    setActiveFilter({ type: filterType, value });
     setOpenFilter(null);
+
+    // Применяем фильтр
+    if (!tracks || !Array.isArray(tracks)) {
+      return;
+    }
+
+    let filtered = tracks;
+
+    if (filterType === 'author') {
+      filtered = tracks.filter(
+        (track) => track.author === value && track.author !== '-'
+      );
+    } else if (filterType === 'year') {
+      filtered = tracks.filter((track) => {
+        if (track.release_date) {
+          const year = new Date(track.release_date).getFullYear();
+          return year === value;
+        }
+        return false;
+      });
+    } else if (filterType === 'genre') {
+      filtered = tracks.filter(
+        (track) => track.genre && track.genre.includes(value as string)
+      );
+    }
+
+    dispatch(setPlaylist(filtered));
   };
 
   return (
