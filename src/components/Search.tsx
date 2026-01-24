@@ -3,19 +3,19 @@
 import { useState } from 'react';
 import styles from './Search.module.css';
 
-// Интерфейс для пропсов компонента Search
 interface SearchProps {
   onSearchChange?: (query: string) => void;
 }
 
-// Компонент поиска - строка ввода с иконкой поиска
+// Компонент поиска - простое поле ввода с иконкой
+// При вводе текста вызывает callback, чтобы родительский компонент мог фильтровать треки
 export default function Search({ onSearchChange }: SearchProps) {
   const [searchQuery, setSearchQuery] = useState('');
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setSearchQuery(value);
-    // Вызываем callback для уведомления родительского компонента
+    // Передаю значение в родительский компонент для фильтрации
     if (onSearchChange) {
       onSearchChange(value);
     }

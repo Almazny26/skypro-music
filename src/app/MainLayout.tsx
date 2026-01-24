@@ -24,40 +24,47 @@ interface MainLayoutProps {
   compilationId?: number;
 }
 
-// Единый Layout для главной страницы и страницы подборок
-export default function MainLayout({ tracks: initialTracks, error: initialError, compilationId }: MainLayoutProps = {}) {
+// Главный layout, который используется и на главной странице, и на странице подборок
+// Принимает треки из пропсов, если они есть (например, с сервера), или загружает сам
+export default function MainLayout({
+  tracks: initialTracks,
+  error: initialError,
+  compilationId,
+}: MainLayoutProps = {}) {
   const dispatch = useAppDispatch();
   const currentTrack = useAppSelector((state) => state.track.currentTrack);
   const isPlaying = useAppSelector((state) => state.track.isPlaying);
   const playlist = useAppSelector((state) => state.track.playlist);
-  // Локальные состояния компонента
+
+  // Локальные состояния для управления плеером и фильтрами
   const [isShuffled, setIsShuffled] = useState(false);
-  const [playedTracks, setPlayedTracks] = useState<number[]>([]);
-  const [likedTracks, setLikedTracks] = useState<number[]>([]);
+  const [playedTracks, setPlayedTracks] = useState<number[]>([]); // Для режима перемешивания
+  const [likedTracks, setLikedTracks] = useState<number[]>([]); // ID треков, которые лайкнул пользователь
   const [searchQuery, setSearchQuery] = useState('');
   const [tracks, setTracks] = useState<Track[]>(initialTracks || []);
   const [error, setError] = useState<string | null>(initialError || null);
-  const [isLoading, setIsLoading] = useState(!initialTracks);
+  const [isLoading, setIsLoading] = useState(!initialTracks); // Если треки переданы, не показываю лоадер
 
-  // Загружаем треки на клиенте, если они не были переданы
+  // Загружаю треки, если они не были переданы из пропсов (например, на главной странице)
   useEffect(() => {
+    // Если треки уже есть (например, пришли с сервера на странице подборок), просто использую их
     if (initialTracks && initialTracks.length > 0) {
       setTracks(initialTracks);
       setIsLoading(false);
       return;
     }
 
+    // Флаг для отмены запроса, если компонент размонтировался
     let cancelled = false;
 
     const loadTracks = async () => {
       setIsLoading(true);
       setError(null);
       try {
-        console.log('Загрузка треков...');
         const loadedTracks = await getTracks();
-        console.log('Загружено треков:', loadedTracks?.length || 0);
+        // Проверяю, не размонтировался ли компонент во время загрузки
         if (cancelled) return;
-        
+
         if (!loadedTracks || loadedTracks.length === 0) {
           setError('Треки не найдены. Возможно, требуется авторизация.');
         } else {
@@ -65,10 +72,14 @@ export default function MainLayout({ tracks: initialTracks, error: initialError,
         }
       } catch (err) {
         if (cancelled) return;
-        console.error('Ошибка загрузки треков:', err);
-        const errorMessage = err instanceof Error
-          ? err.message
-          : 'Произошла ошибка при загрузке треков';
+        // Логирую только в dev режиме, чтобы не засорять консоль в production
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Ошибка загрузки треков:', err);
+        }
+        const errorMessage =
+          err instanceof Error
+            ? err.message
+            : 'Произошла ошибка при загрузке треков';
         setError(errorMessage);
       } finally {
         if (!cancelled) {
@@ -79,22 +90,23 @@ export default function MainLayout({ tracks: initialTracks, error: initialError,
 
     loadTracks();
 
+    // Cleanup функция - отменяю запрос при размонтировании
     return () => {
       cancelled = true;
     };
   }, [initialTracks]);
 
-  // При первой загрузке страницы загружаем треки в плейлист
+  // Когда треки загрузились, отправляю их в Redux store для плейлиста
   useEffect(() => {
     if (Array.isArray(tracks) && tracks.length > 0) {
       dispatch(setPlaylist(tracks));
     }
   }, [tracks, dispatch]);
 
-  // Когда меняется поисковый запрос, фильтруем треки
+  // Фильтрую треки по поисковому запросу - ищу в названии, авторе и альбоме
   useEffect(() => {
     if (!Array.isArray(tracks) || tracks.length === 0) return;
-    
+
     const filtered = searchQuery
       ? tracks.filter(
           (track) =>
@@ -106,37 +118,45 @@ export default function MainLayout({ tracks: initialTracks, error: initialError,
     dispatch(setPlaylist(filtered));
   }, [searchQuery, tracks, dispatch]);
 
-  // Обработчик клика на трек в списке
+  // Когда кликают на трек в списке - либо запускаю его, либо ставлю на паузу, если он уже играет
   const handleTrackSelect = (track: Track) => {
     if (currentTrack?._id === track._id) {
+      // Если это текущий трек - просто переключаю play/pause
       dispatch(togglePlayPause());
     } else {
+      // Иначе запускаю новый трек
       dispatch(setCurrentTrack(track));
       dispatch(setIsPlaying(true));
+      // Если включен shuffle, сбрасываю список проигранных треков
       if (isShuffled) {
         setPlayedTracks([track._id]);
       }
     }
   };
 
+  // Обработчик кнопки play/pause в плеере
   const handlePlayPause = () => {
+    // Если трека нет, но есть плейлист - запускаю первый трек
     if (!currentTrack && playlist.length > 0) {
       dispatch(setCurrentTrack(playlist[0]));
       dispatch(setIsPlaying(true));
     } else if (currentTrack) {
+      // Иначе просто переключаю состояние
       dispatch(togglePlayPause());
     }
   };
 
-  // Функция для получения следующего трека
+  // Получаю следующий трек - учитываю режим shuffle
   const getNextTrack = (): Track | null => {
     if (!currentTrack) return null;
 
     if (isShuffled) {
+      // В режиме перемешивания выбираю случайный трек из непроигранных
       const unplayedTracks = playlist.filter(
         (track) => !playedTracks.includes(track._id),
       );
 
+      // Если все треки проиграны - сбрасываю список и выбираю случайный
       if (unplayedTracks.length === 0) {
         setPlayedTracks([currentTrack._id]);
         const availableTracks = playlist.filter(
@@ -152,10 +172,12 @@ export default function MainLayout({ tracks: initialTracks, error: initialError,
         unplayedTracks[Math.floor(Math.random() * unplayedTracks.length)];
       return randomTrack;
     } else {
+      // В обычном режиме просто беру следующий по порядку
       const currentIndex = playlist.findIndex(
         (track) => track._id === currentTrack._id,
       );
       if (currentIndex !== -1) {
+        // Если это последний трек - следующего нет
         if (currentIndex === playlist.length - 1) {
           return null;
         }
@@ -166,7 +188,7 @@ export default function MainLayout({ tracks: initialTracks, error: initialError,
     return null;
   };
 
-  // Функция для получения предыдущего трека
+  // Получаю предыдущий трек - всегда по порядку, shuffle не влияет
   const getPrevTrack = (): Track | null => {
     if (!currentTrack) return null;
 
@@ -174,6 +196,7 @@ export default function MainLayout({ tracks: initialTracks, error: initialError,
       (track) => track._id === currentTrack._id,
     );
     if (currentIndex !== -1) {
+      // Если это первый трек - предыдущего нет
       if (currentIndex === 0) {
         return null;
       }
@@ -183,12 +206,13 @@ export default function MainLayout({ tracks: initialTracks, error: initialError,
     return null;
   };
 
-  // Обработчик кнопки "следующий трек"
+  // Обработчик кнопки "следующий трек" в плеере
   const handleNextTrack = () => {
     if (!currentTrack) return;
 
     const nextTrack = getNextTrack();
     if (nextTrack) {
+      // Если shuffle включен, добавляю текущий трек в список проигранных
       if (isShuffled) {
         setPlayedTracks((prev) => [...prev, currentTrack._id]);
       }
@@ -197,7 +221,7 @@ export default function MainLayout({ tracks: initialTracks, error: initialError,
     }
   };
 
-  // Обработчик кнопки "предыдущий трек"
+  // Обработчик кнопки "предыдущий трек" в плеере
   const handlePrevTrack = () => {
     if (!currentTrack) return;
 
@@ -208,9 +232,10 @@ export default function MainLayout({ tracks: initialTracks, error: initialError,
     }
   };
 
-  // Переключение режима перемешивания
+  // Включаю/выключаю режим перемешивания
   const handleToggleShuffle = () => {
     setIsShuffled(!isShuffled);
+    // При переключении сбрасываю список проигранных треков
     if (currentTrack) {
       setPlayedTracks([currentTrack._id]);
     } else {
@@ -218,7 +243,7 @@ export default function MainLayout({ tracks: initialTracks, error: initialError,
     }
   };
 
-  // Переключение лайка на треке
+  // Добавляю/убираю лайк на треке - пока только локально, без сохранения на сервере
   const handleToggleLike = (trackId: number) => {
     setLikedTracks((prev) => {
       if (prev.includes(trackId)) {
@@ -246,12 +271,16 @@ export default function MainLayout({ tracks: initialTracks, error: initialError,
             <h2 className={styles.h2}>Треки</h2>
             <Filter tracks={tracks} />
             {isLoading && (
-              <div style={{ color: '#fff', padding: '20px', textAlign: 'center' }}>
+              <div
+                style={{ color: '#fff', padding: '20px', textAlign: 'center' }}
+              >
                 Загрузка треков...
               </div>
             )}
             {error && (
-              <div style={{ color: 'red', padding: '20px', textAlign: 'center' }}>
+              <div
+                style={{ color: 'red', padding: '20px', textAlign: 'center' }}
+              >
                 {error}
               </div>
             )}

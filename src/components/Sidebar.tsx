@@ -3,51 +3,83 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import styles from './Sidebar.module.css';
-import { getUsername } from '@/api/api';
+import { getUsername, getToken } from '@/api/api';
+import LogoutModal from './LogoutModal';
+import AuthModal from './AuthModal';
 
-// Компонент правой боковой панели
-// Показывает информацию о пользователе и коллекцию плейлистов
+// Правая боковая панель - показывает имя пользователя и плейлисты
 export default function Sidebar() {
   const [username, setUsername] = useState<string>('');
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
-    // Функция для обновления username
+    // При загрузке компонента проверяю, нет ли в localStorage мусора
+    // Иногда там может быть строка "undefined" вместо реального значения
+    if (typeof window !== 'undefined') {
+      const storedUsername = localStorage.getItem('username');
+      if (storedUsername === 'undefined' || storedUsername === 'null') {
+        localStorage.removeItem('username');
+      }
+    }
+
+    // Функция, которая обновляет имя пользователя и проверяет авторизацию
     const updateUsername = () => {
+      const token = getToken();
+      setIsAuthenticated(!!token); // Есть токен = авторизован
+      
       const currentUsername = getUsername();
-      setUsername(currentUsername || '');
+      // Фильтрую некорректные значения, чтобы не показывать "undefined" в интерфейсе
+      if (currentUsername && currentUsername !== 'undefined' && currentUsername !== 'null') {
+        setUsername(currentUsername);
+      } else {
+        setUsername(''); // Если нет имени, покажу "Гость"
+      }
     };
 
-    // Проверяем при монтировании
+    // Проверяю сразу при монтировании компонента
     updateUsername();
 
-    // Слушаем изменения в localStorage (событие storage срабатывает при изменении в других вкладках)
+    // Слушаю изменения localStorage в других вкладках браузера
+    // Это нужно, чтобы если пользователь залогинился в другой вкладке, эта тоже обновилась
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'username') {
+      if (e.key === 'username' || e.key === 'accessToken') {
         updateUsername();
       }
     };
 
-    // Также слушаем изменения в текущей вкладке через кастомное событие
+    // Слушаю кастомное событие для обновления в текущей вкладке
+    // Когда пользователь входит/выходит, отправляется событие localStorageChange
     const handleCustomStorageChange = () => {
       updateUsername();
     };
 
     window.addEventListener('storage', handleStorageChange);
-    // Добавляем слушатель для обновления при фокусе окна
-    window.addEventListener('focus', updateUsername);
-    // Слушаем кастомное событие для обновления в той же вкладке
     window.addEventListener('localStorageChange', handleCustomStorageChange);
 
+    // Cleanup - убираю слушатели при размонтировании
     return () => {
       window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('focus', updateUsername);
       window.removeEventListener('localStorageChange', handleCustomStorageChange);
     };
   }, []);
 
+  // Пока плейлисты не реализованы, просто показываю alert
   const handlePlaylistClick = (e: React.MouseEvent) => {
     e.preventDefault();
     alert('Еще не реализовано');
+  };
+
+  // При клике на иконку выхода проверяю авторизацию
+  // Если авторизован - показываю модалку подтверждения выхода
+  // Если нет - показываю модалку входа/регистрации
+  const handleLogoutIconClick = () => {
+    if (isAuthenticated) {
+      setIsLogoutModalOpen(true);
+    } else {
+      setIsAuthModalOpen(true);
+    }
   };
 
   return (
@@ -63,12 +95,25 @@ export default function Sidebar() {
           </svg>
         </div>
         {/* Иконка выхода */}
-        <div className={styles.logoutIcon}>
+        <div className={styles.logoutIcon} onClick={handleLogoutIconClick}>
           <svg>
             <use href="/img/icon/sprite.svg#logout"></use>
           </svg>
         </div>
       </div>
+
+      {/* Модальное окно подтверждения выхода */}
+      <LogoutModal
+        isOpen={isLogoutModalOpen}
+        onClose={() => setIsLogoutModalOpen(false)}
+        username={username}
+      />
+
+      {/* Модальное окно входа/регистрации */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+      />
       
       {/* Блок с коллекцией плейлистов */}
       <div className={styles.block}>

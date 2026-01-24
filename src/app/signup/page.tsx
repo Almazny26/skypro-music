@@ -8,8 +8,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { register, setToken, setUserInfo } from '@/api/api';
 
-// Страница регистрации нового пользователя
-// Похожа на страницу входа, но с дополнительным полем для подтверждения пароля
+// Страница регистрации - почти как вход, но с полем подтверждения пароля
 export default function SignUp() {
   const router = useRouter();
   const [error, setError] = useState<string>('');
@@ -25,14 +24,29 @@ export default function SignUp() {
     const password = formData.get('password') as string;
     const passwordConfirm = formData.get('passwordConfirm') as string;
 
-    // Проверка совпадения паролей
+    // Проверяю, что все поля заполнены
+    if (!email || !password || !passwordConfirm) {
+      setError('Заполните все поля');
+      setIsLoading(false);
+      return;
+    }
+
+    // Валидирую формат email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setError('Введите корректный email адрес');
+      setIsLoading(false);
+      return;
+    }
+
+    // Проверяю, что пароли совпадают
     if (password !== passwordConfirm) {
       setError('Пароли не совпадают');
       setIsLoading(false);
       return;
     }
 
-    // Проверка длины пароля
+    // Минимальная длина пароля
     if (password.length < 6) {
       setError('Пароль должен содержать минимум 6 символов');
       setIsLoading(false);
@@ -40,18 +54,44 @@ export default function SignUp() {
     }
 
     try {
-      console.log('Отправка данных регистрации:', { email, password: '***' });
       const response = await register({ email, password });
       setToken(response.access);
-      setUserInfo(response.username, response.email);
-      // Небольшая задержка, чтобы токен успел сохраниться
+      
+      // Определяю username для сохранения - логика такая же, как при входе
+      let usernameToSave: string;
+      if (response.username) {
+        usernameToSave = response.username;
+      } else if (response.email) {
+        // Берем часть email до @ как username
+        usernameToSave = response.email.split('@')[0];
+      } else {
+        usernameToSave = 'Пользователь';
+      }
+      
+      setUserInfo(usernameToSave, response.email || email);
+      
+      // Дополнительная проверка сохранения
+      setTimeout(() => {
+        const savedUsername = localStorage.getItem('username');
+        if (!savedUsername || savedUsername === 'undefined' || savedUsername === 'null') {
+          setUserInfo(usernameToSave, response.email || email);
+        }
+      }, 50);
+      
+      // Задержка перед редиректом
       setTimeout(() => {
         router.push('/');
-        router.refresh();
-      }, 100);
+      }, 200);
     } catch (err) {
-      console.error('Ошибка регистрации:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Произошла ошибка при регистрации';
+      // Показываю ошибку пользователю
+      let errorMessage = 'Произошла ошибка при регистрации';
+      
+      if (err instanceof Error) {
+        errorMessage = err.message;
+      } else if (typeof err === 'string') {
+        errorMessage = err;
+      }
+      
       setError(errorMessage);
     } finally {
       setIsLoading(false);

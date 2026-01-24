@@ -1,16 +1,16 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import type { Track } from '@/api/api';
 
-// Экспортируем тип Track из API для использования в других частях приложения
+// Экспортирую тип Track, чтобы использовать в других файлах
 export type { Track };
 
-// Состояние для Redux - что храним в store
+// Определяю структуру состояния для треков и плеера
 interface TrackState {
-  currentTrack: Track | null; // текущий трек который играет, или null если ничего не играет
-  isPlaying: boolean; // играет ли сейчас трек
-  currentTime: number; // сколько секунд уже прошло
-  duration: number; // общая длительность трека в секундах
-  playlist: Track[]; // список треков в текущем плейлисте (с учетом поиска)
+  currentTrack: Track | null; // Текущий трек, который играет (или null, если ничего не играет)
+  isPlaying: boolean; // Флаг воспроизведения - играет ли сейчас трек
+  currentTime: number; // Текущая позиция воспроизведения в секундах
+  duration: number; // Общая длительность трека в секундах
+  playlist: Track[]; // Список треков в плейлисте (учитывает поиск и фильтры)
 }
 
 // Начальное состояние - все пустое
@@ -19,43 +19,44 @@ const initialState: TrackState = {
   isPlaying: false,
   currentTime: 0,
   duration: 0,
-  playlist: [], // изначально пустой массив
+  playlist: [],
 };
 
-// Создаю slice для управления состоянием треков
+// Создаю Redux slice для управления состоянием треков
 const trackSlice = createSlice({
-  name: 'track', // имя для devtools
+  name: 'track', // Имя для Redux DevTools
   initialState,
   reducers: {
-    // Устанавливаем текущий трек
+    // Устанавливаю текущий трек - когда пользователь кликает на трек в списке
     setCurrentTrack: (state, action: PayloadAction<Track | null>) => {
-      state.currentTrack = action.payload; // просто заменяем трек
+      state.currentTrack = action.payload;
     },
-    // Устанавливаем состояние воспроизведения (играет/не играет)
+    // Устанавливаю состояние воспроизведения (play/pause)
     setIsPlaying: (state, action: PayloadAction<boolean>) => {
       state.isPlaying = action.payload;
     },
-    // Переключаем play/pause - если есть трек, меняем состояние
+    // Переключаю play/pause - если трек есть, меняю состояние на противоположное
     togglePlayPause: (state) => {
       if (state.currentTrack) {
-        state.isPlaying = !state.isPlaying; // инвертируем булевое значение
+        state.isPlaying = !state.isPlaying;
       }
     },
-    // Обновляем текущее время воспроизведения
+    // Обновляю текущее время - вызывается во время воспроизведения
     setCurrentTime: (state, action: PayloadAction<number>) => {
       state.currentTime = action.payload;
     },
-    // Устанавливаем длительность трека (получаем из метаданных аудио)
+    // Устанавливаю длительность трека - получаю из метаданных аудио элемента
     setDuration: (state, action: PayloadAction<number>) => {
       state.duration = action.payload;
     },
-    // Обновляем плейлист (например, при поиске)
+    // Обновляю плейлист - используется при поиске, фильтрации и загрузке треков
     setPlaylist: (state, action: PayloadAction<Track[]>) => {
       state.playlist = action.payload;
     },
   },
 });
 
+// Экспортирую actions для использования в компонентах
 export const {
   setCurrentTrack,
   setIsPlaying,

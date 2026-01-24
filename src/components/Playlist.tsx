@@ -5,16 +5,17 @@ import { useAppSelector } from '@/store/hooks';
 import styles from './Playlist.module.css';
 import Track from './Track';
 
-// Функция для преобразования секунд в формат MM:SS
+// Преобразую секунды в формат MM:SS для отображения
 function formatDuration(seconds: number): string {
+  // Проверяю на валидность, чтобы не было NaN или отрицательных значений
   if (!isFinite(seconds) || isNaN(seconds) || seconds < 0) return '0:00';
   const roundedSeconds = Math.floor(seconds);
   const minutes = Math.floor(roundedSeconds / 60);
   const remainingSeconds = roundedSeconds % 60;
+  // padStart добавляет ноль в начале, если секунд меньше 10
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
 }
 
-// Интерфейс для пропсов компонента Playlist
 interface PlaylistProps {
   tracks: Array<{
     _id: number;
@@ -29,69 +30,68 @@ interface PlaylistProps {
   onToggleLike: (trackId: number) => void;
 }
 
-// Компонент списка треков (плейлиста)
-// Содержит заголовки колонок и список компонентов Track
+// Компонент списка треков - отображает таблицу с заголовками и список треков
 export default function Playlist({
   tracks,
   likedTracks,
   onTrackSelect,
   onToggleLike,
 }: PlaylistProps) {
+  // Получаю данные о текущем треке из Redux store
   const currentTrack = useAppSelector((state) => state.track.currentTrack);
   const isPlaying = useAppSelector((state) => state.track.isPlaying);
   const currentTime = useAppSelector((state) => state.track.currentTime);
   const duration = useAppSelector((state) => state.track.duration);
   const currentTrackId = currentTrack?._id || null;
 
-  // Храним реальные длительности треков (получаем из метаданных аудио)
-  // Используем Map для быстрого доступа по ID трека
+  // Храню реальные длительности треков, которые получаю из метаданных аудио файлов
+  // Использую Map для быстрого поиска по ID трека
   const [trackDurations, setTrackDurations] = useState<Map<number, number>>(
     new Map(),
   );
 
-  // Загружаем реальную длительность каждого трека из аудио файлов
-  // Это нужно потому что в данных может быть неверная длительность
+  // Загружаю реальную длительность каждого трека из аудио файлов
+  // Делаю это, потому что в данных от API может быть неверная длительность
   useEffect(() => {
-    let cancelled = false; // флаг для отмены загрузки если компонент размонтировался
-    const audioElements: HTMLAudioElement[] = []; // массив всех созданных audio элементов
+    let cancelled = false; // Флаг для отмены, если компонент размонтировался
+    const audioElements: HTMLAudioElement[] = []; // Сохраняю все audio элементы для cleanup
 
     const loadDurations = async () => {
       const durations = new Map<number, number>();
 
-      // Для каждого трека создаем Promise который загрузит метаданные
+      // Для каждого трека создаю Promise, который загрузит метаданные (длительность)
       const promises = tracks.map((track) => {
         return new Promise<void>((resolve) => {
-          // Если загрузка отменена, сразу резолвим
+          // Если компонент уже размонтирован, сразу выхожу
           if (cancelled) {
             resolve();
             return;
           }
 
-          // Создаем новый audio элемент для загрузки метаданных
+          // Создаю audio элемент только для получения метаданных
           const audio = new Audio();
-          audioElements.push(audio); // сохраняем для очистки
+          audioElements.push(audio); // Сохраняю для последующей очистки
 
-          // Когда загрузились метаданные (длительность)
+          // Когда метаданные загрузились, получаю длительность
           const handleLoadedMetadata = () => {
-            // Проверяем что данные валидные и загрузка не отменена
+            // Проверяю валидность данных и что загрузка не отменена
             if (
               !cancelled &&
               isFinite(audio.duration) &&
               !isNaN(audio.duration) &&
               audio.duration > 0
             ) {
-              durations.set(track._id, audio.duration); // сохраняем длительность
+              durations.set(track._id, audio.duration);
             }
-            // Удаляем обработчики чтобы не было утечек
+            // Удаляю обработчики, чтобы не было утечек памяти
             audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
             audio.removeEventListener('error', handleError);
             resolve();
           };
 
-          // Если произошла ошибка загрузки
+          // Если не удалось загрузить - использую длительность из данных API
           const handleError = () => {
             if (!cancelled) {
-              // Используем длительность из исходных данных как fallback
               durations.set(track._id, track.duration_in_seconds);
             }
             audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
@@ -99,20 +99,20 @@ export default function Playlist({
             resolve();
           };
 
-          // Подписываемся на события
+          // Подписываюсь на события
           audio.addEventListener('loadedmetadata', handleLoadedMetadata);
           audio.addEventListener('error', handleError);
 
-          // Устанавливаем preload='metadata' чтобы загрузить только метаданные, не весь файл
+          // preload='metadata' загружает только метаданные, не весь файл - экономит трафик
           audio.preload = 'metadata';
-          audio.src = track.track_file; // начинаем загрузку
+          audio.src = track.track_file; // Начинаю загрузку
         });
       });
 
-      // Ждем пока все треки загрузят метаданные
+      // Жду, пока все треки загрузят метаданные
       await Promise.all(promises);
 
-      // Если загрузка не была отменена, обновляем состояние
+      // Если компонент еще не размонтирован, обновляю состояние
       if (!cancelled) {
         setTrackDurations(durations);
       }
@@ -120,13 +120,13 @@ export default function Playlist({
 
     loadDurations();
 
-    // Cleanup функция - выполнится при размонтировании или изменении tracks
+    // Cleanup - отменяю загрузку при размонтировании или изменении списка треков
     return () => {
-      cancelled = true; // помечаем что загрузка отменена
-      // Останавливаем загрузку всех audio элементов
+      cancelled = true;
+      // Останавливаю загрузку всех audio элементов
       audioElements.forEach((audio) => {
-        audio.src = ''; // очищаем источник
-        audio.load(); // перезагружаем (это останавливает загрузку)
+        audio.src = ''; // Очищаю источник
+        audio.load(); // Это останавливает загрузку
       });
     };
   }, [tracks]);
@@ -145,22 +145,22 @@ export default function Playlist({
         </div>
       </div>
 
-      {/* Список треков - каждый трек это отдельный компонент Track */}
+      {/* Список треков - рендерю каждый трек как отдельный компонент */}
       <div className={styles.playlist}>
         {tracks.map((track) => {
-          // Проверяем является ли этот трек текущим
+          // Проверяю, является ли этот трек текущим (играющим)
           const isActive = currentTrackId === track._id;
           let displayDuration: string;
 
-          // Для активного трека показываем оставшееся время (обратный отсчет)
+          // Для активного трека показываю оставшееся время (обратный отсчет)
           if (isActive && duration > 0) {
             const remainingTime = Math.max(0, duration - currentTime); // Math.max чтобы не было отрицательных значений
             displayDuration = formatDuration(remainingTime);
           } else {
-            // Для остальных треков показываем общую длительность
-            // Сначала пытаемся взять реальную длительность из загруженных метаданных
+            // Для остальных треков показываю общую длительность
+            // Сначала пытаюсь взять реальную длительность из метаданных аудио
             const realDuration = trackDurations.get(track._id);
-            // Если реальная длительность есть - используем её, иначе из данных
+            // Если есть реальная длительность - использую её, иначе беру из данных API
             const trackDuration =
               realDuration !== undefined
                 ? realDuration

@@ -1,7 +1,6 @@
 'use client';
 
 import styles from './signin.module.css';
-// classNames - библиотека для удобного объединения CSS классов
 import classNames from 'classnames';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -9,7 +8,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { login, setToken, setUserInfo } from '@/api/api';
 
-// Страница входа в систему
+// Страница входа - пользователь может войти по email или username
 export default function Signin() {
   const router = useRouter();
   const [error, setError] = useState<string>('');
@@ -24,13 +23,25 @@ export default function Signin() {
     const loginValue = formData.get('login') as string;
     const password = formData.get('password') as string;
 
+    // Проверяю, что поля заполнены
     if (!loginValue || !password) {
       setError('Заполните все поля');
       setIsLoading(false);
       return;
     }
 
-    // Проверка длины пароля
+    // Если пользователь ввел email, проверяю его формат
+    const isEmail = loginValue.includes('@');
+    if (isEmail) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(loginValue)) {
+        setError('Введите корректный email адрес');
+        setIsLoading(false);
+        return;
+      }
+    }
+
+    // Минимальная длина пароля - 6 символов
     if (password.length < 6) {
       setError('Пароль должен содержать минимум 6 символов');
       setIsLoading(false);
@@ -38,26 +49,57 @@ export default function Signin() {
     }
 
     try {
-      // Определяем, является ли значение email или username
-      // Если содержит @, считаем email, иначе username
+      // Определяю, что ввел пользователь - email или username
+      // Если есть @, значит email, иначе username
       const isEmail = loginValue.includes('@');
       const credentials = isEmail
         ? { email: loginValue, password }
         : { username: loginValue, password };
       
       const response = await login(credentials);
-      setToken(response.access);
-      setUserInfo(response.username, response.email);
-      // Небольшая задержка, чтобы токен успел сохраниться
+      setToken(response.access); // Сохраняю токен для последующих запросов
+      
+      // Определяю, какое имя сохранить для отображения в интерфейсе
+      let usernameToSave: string;
+      if (response.username) {
+        // Если API вернул username - использую его
+        usernameToSave = response.username;
+      } else if (!isEmail && loginValue) {
+        // Если пользователь вводил username (не email), использую его
+        usernameToSave = loginValue;
+      } else if (response.email) {
+        // Если вводил email, беру часть до @ как username
+        usernameToSave = response.email.split('@')[0];
+      } else {
+        // На крайний случай - дефолтное значение
+        usernameToSave = 'Пользователь';
+      }
+      
+      setUserInfo(usernameToSave, response.email || loginValue);
+      
+      // Дополнительная проверка - иногда localStorage глючит, пересохраняю если нужно
       setTimeout(() => {
-        router.push('/');
-        router.refresh();
-      }, 100);
+        const savedUsername = localStorage.getItem('username');
+        if (!savedUsername || savedUsername === 'undefined' || savedUsername === 'null') {
+          setUserInfo(usernameToSave, response.email || loginValue);
+        }
+      }, 50);
+      
+      // Небольшая задержка перед редиректом, чтобы данные точно сохранились
+      setTimeout(() => {
+        router.push('/'); // Переход на главную без перезагрузки страницы
+      }, 200);
     } catch (err) {
-      console.error('Ошибка авторизации:', err);
-      setError(
-        err instanceof Error ? err.message : 'Произошла ошибка при входе'
-      );
+      // Обрабатываю ошибки от API и показываю пользователю понятное сообщение
+      let errorMessage = 'Произошла ошибка при входе';
+      
+      if (err instanceof Error) {
+        errorMessage = err.message;
+      } else if (typeof err === 'string') {
+        errorMessage = err;
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }

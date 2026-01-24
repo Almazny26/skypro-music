@@ -1,7 +1,7 @@
-// Базовый URL API
+// URL бэкенда, который нам дали для проекта
 const API_BASE_URL = 'https://webdev-music-003b5b991590.herokuapp.com';
 
-// Типы для API ответов
+// Типы для запросов и ответов API - чтобы TypeScript понимал структуру данных
 export interface LoginRequest {
   email?: string;
   username?: string;
@@ -37,7 +37,7 @@ export interface TracksResponse {
   success?: boolean;
   data?: Track[];
   items?: Track[];
-  // API может вернуть массив напрямую, объект с items или объект с data
+  // Бэкенд иногда возвращает данные в разных форматах, поэтому делаю так
   [key: string]: any;
 }
 
@@ -48,45 +48,60 @@ export interface CompilationResponse {
   tracks: Track[];
 }
 
-// Функция для получения токена из localStorage
+// Получаю токен из localStorage - проверяю window, потому что Next.js рендерит на сервере
 export function getToken(): string | null {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem('accessToken');
 }
 
-// Функция для сохранения токена
+// Сохраняю токен после успешной авторизации
 export function setToken(token: string): void {
   if (typeof window === 'undefined') return;
   localStorage.setItem('accessToken', token);
 }
 
-// Функция для сохранения информации о пользователе
+// Сохраняю данные пользователя и отправляю событие, чтобы компоненты обновились
+// Делаю проверки на undefined/null, потому что иногда API возвращает странные значения
 export function setUserInfo(username: string, email: string): void {
   if (typeof window === 'undefined') return;
-  localStorage.setItem('username', username);
-  localStorage.setItem('userEmail', email);
-  // Отправляем кастомное событие для обновления компонентов в той же вкладке
-  window.dispatchEvent(new Event('localStorageChange'));
+  
+  // Проверяю, что username валидный - иначе в интерфейсе будет "undefined"
+  if (username && username !== 'undefined' && username !== 'null' && username.trim() !== '') {
+    const trimmedUsername = username.trim();
+    localStorage.setItem('username', trimmedUsername);
+    // Отправляю событие, чтобы Sidebar и другие компоненты обновились без перезагрузки
+    window.dispatchEvent(new Event('localStorageChange'));
+  }
+  if (email && email !== 'undefined' && email !== 'null' && email.trim() !== '') {
+    localStorage.setItem('userEmail', email.trim());
+  }
 }
 
-// Функция для получения username
+// Получаю username для отображения в интерфейсе
 export function getUsername(): string | null {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem('username');
+  const username = localStorage.getItem('username');
+  // Фильтрую некорректные значения - иногда localStorage хранит строку "undefined"
+  if (username === 'undefined' || username === 'null' || !username) {
+    return null;
+  }
+  return username;
 }
 
-// Функция для удаления токена
+// Очищаю все данные при выходе и отправляю событие для обновления UI
 export function removeToken(): void {
   if (typeof window === 'undefined') return;
   localStorage.removeItem('accessToken');
   localStorage.removeItem('username');
   localStorage.removeItem('userEmail');
+  // Компоненты должны обновиться и показать "Гость" вместо имени
+  window.dispatchEvent(new Event('localStorageChange'));
 }
 
-// Базовая функция для выполнения запросов
+// Обертка для всех запросов к API - добавляю токен и обрабатываю ошибки
 async function fetchAPI<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
 ): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
@@ -94,57 +109,88 @@ async function fetchAPI<T>(
     ...(options.headers as Record<string, string> | undefined),
   };
 
+  // Если есть токен, добавляю его в заголовки для авторизованных запросов
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    headers: headers as HeadersInit,
-    cache: 'no-store', // Отключаем кеширование для актуальных данных
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      ...options,
+      headers: headers as HeadersInit,
+      cache: 'no-store', // Отключаю кеш, чтобы всегда получать свежие данные
+    });
+  } catch (networkError) {
+    // Если нет интернета или сервер недоступен - показываю понятное сообщение
+    throw new Error('Не удалось подключиться к серверу. Проверьте подключение к интернету.');
+  }
 
   if (!response.ok) {
     let errorMessage = `Ошибка: ${response.status}`;
+    
+    // Обрабатываю разные статусы - для каждого свое сообщение пользователю
+    if (response.status === 401) {
+      errorMessage = 'Неверный email или пароль';
+    } else if (response.status === 403) {
+      errorMessage = 'Доступ запрещен';
+    } else if (response.status === 404) {
+      errorMessage = 'Ресурс не найден';
+    } else if (response.status === 500) {
+      errorMessage = 'Ошибка сервера. Попробуйте позже';
+    } else if (response.status === 503) {
+      errorMessage = 'Сервис временно недоступен. Попробуйте позже';
+    }
+    
     try {
       const text = await response.text();
-      console.log('Ответ сервера (текст):', text);
       let errorData;
       try {
         errorData = JSON.parse(text);
-        console.log('Ответ сервера (JSON):', errorData);
       } catch {
-        // Если не JSON, используем текст как есть
-        if (text) {
+        // Если ответ не JSON (например, plain text), использую его как есть
+        if (text && text.trim()) {
           errorMessage = text;
         }
         throw new Error(errorMessage);
       }
-      
-      // Обрабатываем разные форматы ошибок
+
+      // Бэкенд возвращает ошибки в разных форматах, поэтому проверяю все варианты
       if (typeof errorData === 'string') {
         errorMessage = errorData;
       } else if (errorData.data?.errors) {
-        // Формат: {"success":false,"message":"...","data":{"errors":{...}}}
+        // Формат с вложенными ошибками по полям - собираю их в одно сообщение
         const errors = errorData.data.errors;
         const errorMessages: string[] = [];
         for (const [field, messages] of Object.entries(errors)) {
           if (Array.isArray(messages) && messages.length > 0) {
-            // Переводим названия полей на русский для лучшего UX
-            const fieldName = field === 'password' ? 'Пароль' : 
-                            field === 'username' ? 'Имя пользователя' :
-                            field === 'email' ? 'Email' : field;
+            // Перевожу названия полей на русский, чтобы пользователю было понятнее
+            const fieldName =
+              field === 'password'
+                ? 'Пароль'
+                : field === 'username'
+                ? 'Имя пользователя'
+                : field === 'email'
+                ? 'Email'
+                : field;
             errorMessages.push(`${fieldName}: ${messages[0]}`);
           } else if (typeof messages === 'string') {
-            const fieldName = field === 'password' ? 'Пароль' : 
-                            field === 'username' ? 'Имя пользователя' :
-                            field === 'email' ? 'Email' : field;
+            const fieldName =
+              field === 'password'
+                ? 'Пароль'
+                : field === 'username'
+                ? 'Имя пользователя'
+                : field === 'email'
+                ? 'Email'
+                : field;
             errorMessages.push(`${fieldName}: ${messages}`);
           }
         }
-        errorMessage = errorMessages.length > 0 
-          ? errorMessages.join(', ') 
-          : (errorData.message || errorMessage);
+        // Объединяю все ошибки в одну строку
+        errorMessage =
+          errorMessages.length > 0
+            ? errorMessages.join(', ')
+            : errorData.message || errorMessage;
       } else if (errorData.detail) {
         errorMessage = errorData.detail;
       } else if (errorData.message) {
@@ -152,9 +198,11 @@ async function fetchAPI<T>(
       } else if (errorData.error) {
         errorMessage = errorData.error;
       } else if (Array.isArray(errorData) && errorData.length > 0) {
-        errorMessage = Array.isArray(errorData[0]) ? errorData[0][0] : String(errorData[0]);
+        errorMessage = Array.isArray(errorData[0])
+          ? errorData[0][0]
+          : String(errorData[0]);
       } else if (typeof errorData === 'object') {
-        // Пытаемся найти первое сообщение об ошибке
+        // Если структура незнакомая, пытаюсь извлечь хоть какое-то сообщение
         const keys = Object.keys(errorData);
         if (keys.length > 0) {
           const firstKey = keys[0];
@@ -164,16 +212,17 @@ async function fetchAPI<T>(
           } else if (typeof firstValue === 'string') {
             errorMessage = firstValue;
           } else {
-            // Если это объект, попробуем найти вложенное сообщение
-            errorMessage = `Ошибка в поле "${firstKey}": ${JSON.stringify(firstValue)}`;
+            // В крайнем случае показываю JSON - лучше что-то, чем ничего
+            errorMessage = `Ошибка в поле "${firstKey}": ${JSON.stringify(
+              firstValue,
+            )}`;
           }
         } else {
           errorMessage = JSON.stringify(errorData);
         }
       }
     } catch (parseError) {
-      // Если не удалось распарсить, используем стандартное сообщение
-      console.error('Ошибка парсинга ответа:', parseError);
+      // Если вообще ничего не получилось распарсить - оставляю стандартное сообщение
     }
     throw new Error(errorMessage);
   }
@@ -181,79 +230,74 @@ async function fetchAPI<T>(
   return response.json();
 }
 
-// Авторизация пользователя
-export async function login(
-  credentials: LoginRequest
-): Promise<AuthResponse> {
+// Вход в систему - принимает email или username
+export async function login(credentials: LoginRequest): Promise<AuthResponse> {
   return fetchAPI<AuthResponse>('/user/login/', {
     method: 'POST',
     body: JSON.stringify(credentials),
   });
 }
 
-// Регистрация пользователя
-export async function register(
-  data: RegisterRequest
-): Promise<AuthResponse> {
-  // API требует username обязательно
-  // Извлекаем username из email (часть до @) или используем весь email
+// Регистрация нового пользователя
+export async function register(data: RegisterRequest): Promise<AuthResponse> {
+  // Бэкенд требует username, но мы получаем только email
+  // Поэтому беру часть до @ как username
   let username: string;
   if (data.email.includes('@')) {
     username = data.email.split('@')[0];
   } else {
     username = data.email;
   }
-  
+
   const requestData = {
     username: username,
     email: data.email,
     password: data.password,
   };
-  
-  console.log('Данные для регистрации:', { ...requestData, password: '***' });
-  
+
   return fetchAPI<AuthResponse>('/user/signup/', {
     method: 'POST',
     body: JSON.stringify(requestData),
   });
 }
 
-// Получение всех треков
+// Получаю все треки с главной страницы
 export async function getTracks(): Promise<Track[]> {
   const response = await fetchAPI<TracksResponse>('/catalog/track/all/');
-  console.log('Ответ API getTracks:', response);
-  
-  // Проверяем разные возможные структуры ответа
+
+  // Бэкенд иногда возвращает данные в разных форматах, проверяю все варианты
   if (Array.isArray(response)) {
     return response;
   }
-  
-  // API возвращает {success: true, data: [...]}
+
+  // Обычно возвращает {success: true, data: [...]}
   if (response.data && Array.isArray(response.data)) {
     return response.data;
   }
-  
-  // Старый формат с items
+
+  // Иногда старый формат с items
   if (response.items && Array.isArray(response.items)) {
     return response.items;
   }
-  
-  // Если структура неожиданная, возвращаем пустой массив
-  console.warn('Неожиданная структура ответа API:', response);
+
+  // Если ничего не подошло - возвращаю пустой массив, чтобы не сломать приложение
+  if (process.env.NODE_ENV === 'development') {
+    console.warn('Неожиданная структура ответа API:', response);
+  }
   return [];
 }
 
-// Получение треков конкретной подборки
+// Получаю треки конкретной подборки по ID
 export async function getCompilationTracks(
-  compilationId: number
+  compilationId: number,
 ): Promise<Track[]> {
   const response = await fetchAPI<CompilationResponse>(
-    `/catalog/selection/${compilationId}/`
+    `/catalog/selection/${compilationId}/`,
   );
   return response.tracks;
 }
 
-// Получение всех подборок (для фильтров и навигации)
+// Получаю список всех подборок (пока не используется, но может пригодиться)
 export async function getCompilations(): Promise<CompilationResponse[]> {
   return fetchAPI<CompilationResponse[]>('/catalog/selection/');
 }

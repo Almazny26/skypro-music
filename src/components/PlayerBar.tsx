@@ -9,7 +9,6 @@ import {
 } from '@/store/trackSlice';
 import styles from './PlayerBar.module.css';
 
-// Интерфейс для пропсов компонента PlayerBar
 interface PlayerBarProps {
   isLiked: boolean;
   isShuffled: boolean;
@@ -20,7 +19,7 @@ interface PlayerBarProps {
   onToggleLike: () => void;
 }
 
-// Компонент плеера - фиксированная панель внизу страницы
+// Плеер внизу страницы - управляет воспроизведением аудио
 export default function PlayerBar({
   isLiked,
   isShuffled,
@@ -33,54 +32,51 @@ export default function PlayerBar({
   const dispatch = useAppDispatch();
   const currentTrack = useAppSelector((state) => state.track.currentTrack);
   const isPlaying = useAppSelector((state) => state.track.isPlaying);
-  // Используем ref для доступа к audio элементу напрямую
+  
+  // Использую ref для прямого доступа к audio элементу
   const audioRef = useRef<HTMLAudioElement>(null);
-  // Локальное состояние для времени (дублируем в Redux для других компонентов)
-  const [currentTime, setCurrentTime] = useState(0); // текущее время в секундах
-  const [duration, setDuration] = useState(0); // общая длительность трека
-  const [isLooping, setIsLooping] = useState(false); // включен ли режим повтора
-  // Храним время последнего клика на кнопку "назад" для логики перемотки
+  // Локальное состояние для времени - дублирую в Redux, чтобы другие компоненты могли использовать
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [isLooping, setIsLooping] = useState(false); // Режим повтора трека
+  // Храню время последнего клика на "назад" - если кликнуть дважды быстро, перематываю на предыдущий трек
   const lastPrevClickTime = useRef<number>(0);
-  // Храним ID таймера чтобы можно было его очистить
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-  // Флаг для отслеживания, воспроизводится ли трек (чтобы избежать конфликтов)
+  // Флаг для отслеживания состояния воспроизведения - помогает избежать конфликтов
   const isPlayingRef = useRef<boolean>(false);
 
-  // Когда меняется текущий трек, обновляем источник аудио
+  // Когда меняется текущий трек, загружаю новый аудио файл
   useEffect(() => {
     const audio = audioRef.current;
-    if (!audio) return; // если элемент еще не создан, выходим
+    if (!audio) return;
 
     if (currentTrack) {
-      // Проверяем, не тот ли это уже трек (чтобы не перезагружать)
+      // Проверяю, не тот ли это уже трек - чтобы не перезагружать без необходимости
       const currentSrc = audio.src || '';
       const trackUrl = currentTrack.track_file;
-      // Сравниваем URL (могут быть разные форматы - с http/https, с trailing slash и т.д.)
+      // Сравниваю URL - они могут быть в разных форматах
       if (currentSrc && (currentSrc === trackUrl || currentSrc.endsWith(trackUrl) || trackUrl.endsWith(currentSrc)) && currentSrc !== window.location.href) {
-        return; // Трек уже загружен, ничего не делаем
+        return; // Трек уже загружен, ничего не делаю
       }
 
-      // Останавливаем текущее воспроизведение если что-то играло
+      // Останавливаю текущее воспроизведение
       audio.pause();
-      // Сбрасываем время на 0 перед загрузкой нового трека
+      // Сбрасываю время перед загрузкой нового трека
       setCurrentTime(0);
-      dispatch(setCurrentTimeAction(0)); // обновляем в Redux тоже
-      // Сбрасываем длительность
+      dispatch(setCurrentTimeAction(0));
       setDuration(0);
       dispatch(setDurationAction(0));
-      // Устанавливаем новый источник - используем полный URL
+      // Устанавливаю новый источник
       audio.src = currentTrack.track_file;
-      // Устанавливаем preload для загрузки метаданных
       audio.preload = 'auto';
-      // Сбрасываем таймер для кнопки "назад"
+      // Сбрасываю таймер для кнопки "назад"
       lastPrevClickTime.current = 0;
-      // Загружаем трек - воспроизведение будет управляться через useEffect для isPlaying
       audio.load();
     } else {
-      // Если трек не выбран, очищаем источник правильно
+      // Если трек не выбран, очищаю источник
       audio.pause();
       audio.removeAttribute('src');
-      audio.load(); // это очистит источник
+      audio.load();
       setCurrentTime(0);
       dispatch(setCurrentTimeAction(0));
       setDuration(0);
@@ -89,7 +85,7 @@ export default function PlayerBar({
     }
   }, [currentTrack, dispatch]);
 
-  // Управляем play/pause когда меняется isPlaying
+  // Управляю play/pause в зависимости от состояния isPlaying из Redux
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !currentTrack) {
@@ -97,37 +93,35 @@ export default function PlayerBar({
       return;
     }
 
-    // Обновляем ref
     isPlayingRef.current = isPlaying;
 
-    // Проверяем, что аудио готово к воспроизведению
     if (isPlaying) {
-      // Проверяем, не играет ли уже (только если действительно играет)
+      // Если уже играет, ничего не делаю
       if (!audio.paused && audio.readyState >= 2) {
-        return; // Уже играет, ничего не делаем
+        return;
       }
 
-      // Ждем, пока аудио будет готово к воспроизведению
+      // Функция для попытки запуска воспроизведения
       const tryPlay = () => {
-        // Проверяем, что трек все еще текущий и должен играть
+        // Проверяю, что трек все еще актуален
         if (!isPlayingRef.current || !currentTrack) return;
         
-        // Проверяем, что источник совпадает с текущим треком
+        // Проверяю, что источник совпадает с текущим треком
         const currentSrc = audio.src || '';
         const trackUrl = currentTrack.track_file;
         const srcMatches = currentSrc === trackUrl || currentSrc.endsWith(trackUrl) || trackUrl.endsWith(currentSrc);
         if (!srcMatches) return;
         
-        if (audio.readyState >= 2) { // HAVE_CURRENT_DATA или выше
+        // readyState >= 2 означает, что есть достаточно данных для воспроизведения
+        if (audio.readyState >= 2) {
           const playPromise = audio.play();
           if (playPromise !== undefined) {
             playPromise
               .then(() => {
-                // Успешно запущено
                 isPlayingRef.current = true;
               })
               .catch((error) => {
-                // Игнорируем AbortError - это нормально при переключении треков
+                // AbortError - это нормально при быстром переключении треков
                 if (error.name !== 'AbortError' && process.env.NODE_ENV === 'development') {
                   console.error('Ошибка воспроизведения:', error);
                 }
@@ -137,7 +131,7 @@ export default function PlayerBar({
         }
       };
 
-      // Пытаемся сразу, если готово
+      // Пытаюсь запустить сразу, если аудио уже готово
       tryPlay();
       
       // Если еще не готово, подписываемся на canplay

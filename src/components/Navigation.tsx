@@ -1,49 +1,63 @@
 'use client';
 
-// Импортируем компоненты Next.js для оптимизированных изображений и навигации
 import Image from 'next/image';
 import Link from 'next/link';
-// Импортируем React хуки для управления состоянием
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-// Импортируем CSS модуль для стилизации этого компонента
 import styles from './Navigation.module.css';
 import { getToken, removeToken } from '@/api/api';
 
-// Компонент навигации - левая боковая панель с логотипом и меню
+// Левая боковая панель с логотипом и меню
 export default function Navigation() {
   const router = useRouter();
-  // Состояние для отслеживания открыто/закрыто меню
-  // При обновлении страницы меню скрыто
+  // Состояние меню - по умолчанию закрыто
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  // Проверяем авторизацию при загрузке и при изменении
+  // Проверяю авторизацию при загрузке и слушаю изменения
   useEffect(() => {
     const checkAuth = () => {
       const token = getToken();
-      setIsAuthenticated(!!token);
+      setIsAuthenticated(!!token); // Есть токен = авторизован
     };
     
+    // Проверяю сразу при монтировании
     checkAuth();
-    // Проверяем каждую секунду (на случай если токен изменился в другом месте)
-    const interval = setInterval(checkAuth, 1000);
     
-    return () => clearInterval(interval);
+    // Слушаю изменения в других вкладках браузера
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'accessToken') {
+        checkAuth();
+      }
+    };
+
+    // Слушаю изменения в текущей вкладке (при входе/выходе)
+    const handleCustomStorageChange = () => {
+      checkAuth();
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('localStorageChange', handleCustomStorageChange);
+    
+    // Cleanup
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('localStorageChange', handleCustomStorageChange);
+    };
   }, []);
 
-  // Обработчик клика на бургер-меню
+  // Открываю/закрываю меню по клику на бургер
   const handleBurgerClick = () => {
     setIsMenuOpen(!isMenuOpen);
   };
 
-  // Обработчик клика на пункты меню
+  // Пока пункты меню не реализованы
   const handleMenuClick = (e: React.MouseEvent) => {
     e.preventDefault();
     alert('Еще не реализовано');
   };
 
-  // Обработчик выхода
+  // Выход из аккаунта - очищаю токен и редирект на страницу входа
   const handleLogout = (e: React.MouseEvent) => {
     e.preventDefault();
     removeToken();

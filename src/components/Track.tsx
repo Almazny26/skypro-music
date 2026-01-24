@@ -2,7 +2,6 @@
 
 import styles from './Track.module.css';
 
-// Описываю какие пропсы принимает компонент Track
 interface TrackProps {
   track: {
     _id: number;
@@ -12,34 +11,34 @@ interface TrackProps {
     duration_in_seconds: number;
     track_file: string;
   };
-  duration: string; // длительность в формате "4:44" (уже отформатированная)
-  subtitle?: string; // опциональное поле, например "(Remix)"
-  isActive?: boolean; // является ли этот трек текущим
-  isPlaying?: boolean; // играет ли сейчас этот трек
-  isLiked?: boolean; // лайкнут ли трек
-  onSelect: (track: TrackProps['track']) => void; // функция которая вызывается при клике на трек
-  onToggleLike: () => void; // функция для переключения лайка
+  duration: string; // Длительность уже в формате "4:44"
+  subtitle?: string; // Опциональное поле, например "(Remix)"
+  isActive?: boolean; // Является ли этот трек текущим (играющим)
+  isPlaying?: boolean; // Играет ли сейчас этот трек
+  isLiked?: boolean; // Лайкнут ли трек пользователем
+  onSelect: (track: TrackProps['track']) => void; // Callback при клике на трек
+  onToggleLike: () => void; // Callback для переключения лайка
 }
 
-// Компонент для отображения одного трека в списке
+// Компонент одной строки трека в списке - показывает название, автора, альбом и длительность
 export default function Track({
   track,
   duration,
   subtitle,
-  isActive = false, // по умолчанию не активен
+  isActive = false,
   isPlaying = false,
   isLiked = false,
   onSelect,
   onToggleLike,
 }: TrackProps) {
-  // Обработчик клика на весь трек
+  // При клике на трек передаю его в родительский компонент для воспроизведения
   const handleClick = () => {
-    onSelect(track); // передаем трек в родительский компонент
+    onSelect(track);
   };
 
-  // Обработчик клика на иконку лайка
+  // При клике на лайк останавливаю всплытие события, чтобы не запускался трек
   const handleLikeClick = (e: React.MouseEvent) => {
-    e.stopPropagation(); // останавливаем всплытие события, чтобы не запускался трек при клике на лайк
+    e.stopPropagation();
     onToggleLike();
   };
 
