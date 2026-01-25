@@ -7,26 +7,20 @@ import classNames from 'classnames';
 import styles from './Filter.module.css';
 import type { Track } from '@/api/api';
 
-// Типы для фильтров
 type FilterType = 'author' | 'year' | 'genre' | null;
 
 interface FilterProps {
   tracks?: Track[];
 }
 
-// Компонент фильтров - извлекает уникальные значения из треков и позволяет фильтровать
 export default function Filter({ tracks = [] }: FilterProps) {
   const dispatch = useAppDispatch();
-  // Отслеживаю, какой фильтр сейчас открыт (null = все закрыты)
   const [openFilter, setOpenFilter] = useState<FilterType>(null);
-  // Активный фильтр - какой тип и значение выбраны
   const [activeFilter, setActiveFilter] = useState<{
     type: FilterType;
     value: string | number | null;
   }>({ type: null, value: null });
 
-  // Извлекаю уникальные значения из треков для выпадающих списков
-  // Использую useMemo, чтобы не пересчитывать при каждом рендере
   const { uniqueAuthors, uniqueGenres, uniqueYears } = useMemo(() => {
     const authors = new Set<string>();
     const genres = new Set<string>();
@@ -41,17 +35,14 @@ export default function Filter({ tracks = [] }: FilterProps) {
     }
 
     tracks.forEach((track) => {
-      // Собираю авторов, пропускаю пустые и дефисы
       if (track.author && track.author !== '-') {
         authors.add(track.author);
       }
 
-      // Жанры приходят массивом, добавляю каждый
       if (track.genre) {
         track.genre.forEach((g) => genres.add(g));
       }
 
-      // Из даты выпуска извлекаю год
       if (track.release_date) {
         const year = new Date(track.release_date).getFullYear();
         if (!isNaN(year)) {
@@ -61,32 +52,27 @@ export default function Filter({ tracks = [] }: FilterProps) {
     });
 
     return {
-      uniqueAuthors: Array.from(authors).sort(), // Сортирую по алфавиту
+      uniqueAuthors: Array.from(authors).sort(),
       uniqueGenres: Array.from(genres).sort(),
-      uniqueYears: Array.from(years).sort((a, b) => b - a), // Годы по убыванию - новые сверху
+      uniqueYears: Array.from(years).sort((a, b) => b - a),
     };
   }, [tracks]);
 
-  // При клике на кнопку фильтра открываю/закрываю выпадающий список
   const handleFilterClick = (filterType: 'author' | 'year' | 'genre') => {
-    // Если кликнули на уже открытый фильтр - закрываю его
     if (openFilter === filterType) {
       setOpenFilter(null);
     } else {
-      // Иначе открываю новый фильтр (старый закроется автоматически)
       setOpenFilter(filterType);
     }
   };
 
-  // Когда пользователь выбрал значение из фильтра - применяю его
   const handleFilterSelect = (
     filterType: 'author' | 'year' | 'genre',
     value: string | number
   ) => {
     setActiveFilter({ type: filterType, value });
-    setOpenFilter(null); // Закрываю выпадающий список
+    setOpenFilter(null);
 
-    // Фильтрую треки в зависимости от типа фильтра
     if (!tracks || !Array.isArray(tracks)) {
       return;
     }
@@ -94,12 +80,10 @@ export default function Filter({ tracks = [] }: FilterProps) {
     let filtered = tracks;
 
     if (filterType === 'author') {
-      // Фильтрую по автору
       filtered = tracks.filter(
         (track) => track.author === value && track.author !== '-'
       );
     } else if (filterType === 'year') {
-      // Фильтрую по году - извлекаю год из даты и сравниваю
       filtered = tracks.filter((track) => {
         if (track.release_date) {
           const year = new Date(track.release_date).getFullYear();
@@ -108,13 +92,11 @@ export default function Filter({ tracks = [] }: FilterProps) {
         return false;
       });
     } else if (filterType === 'genre') {
-      // Фильтрую по жанру - проверяю, есть ли жанр в массиве жанров трека
       filtered = tracks.filter(
         (track) => track.genre && track.genre.includes(value as string)
       );
     }
 
-    // Отправляю отфильтрованные треки в Redux store
     dispatch(setPlaylist(filtered));
   };
 
@@ -122,7 +104,6 @@ export default function Filter({ tracks = [] }: FilterProps) {
     <div className={styles.filter}>
       <div className={styles.filterTitle}>Искать по:</div>
 
-      {/* Кнопка фильтра по исполнителю */}
       <div className={styles.filterWrapper}>
         <div
           className={classNames(styles.filter__button, {
@@ -149,7 +130,6 @@ export default function Filter({ tracks = [] }: FilterProps) {
         )}
       </div>
 
-      {/* Кнопка фильтра по году выпуска */}
       <div className={styles.filterWrapper}>
         <div
           className={classNames(styles.filter__button, {
@@ -181,7 +161,6 @@ export default function Filter({ tracks = [] }: FilterProps) {
         )}
       </div>
 
-      {/* Кнопка фильтра по жанру */}
       <div className={styles.filterWrapper}>
         <div
           className={classNames(styles.filter__button, {
@@ -210,4 +189,3 @@ export default function Filter({ tracks = [] }: FilterProps) {
     </div>
   );
 }
-

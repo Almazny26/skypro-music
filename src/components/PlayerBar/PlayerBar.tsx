@@ -19,7 +19,6 @@ interface PlayerBarProps {
   onToggleLike: () => void;
 }
 
-// Плеер внизу страницы - управляет воспроизведением аудио
 export default function PlayerBar({
   isLiked,
   isShuffled,
@@ -32,48 +31,78 @@ export default function PlayerBar({
   const dispatch = useAppDispatch();
   const currentTrack = useAppSelector((state) => state.track.currentTrack);
   const isPlaying = useAppSelector((state) => state.track.isPlaying);
-  
-  // Использую ref для прямого доступа к audio элементу
+  const playlist = useAppSelector((state) => state.track.playlist);
+
   const audioRef = useRef<HTMLAudioElement>(null);
-  // Локальное состояние для времени - дублирую в Redux, чтобы другие компоненты могли использовать
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [isLooping, setIsLooping] = useState(false); // Режим повтора трека
-  // Храню время последнего клика на "назад" - если кликнуть дважды быстро, перематываю на предыдущий трек
+  const [isLooping, setIsLooping] = useState(false);
   const lastPrevClickTime = useRef<number>(0);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-  // Флаг для отслеживания состояния воспроизведения - помогает избежать конфликтов
+  const stalledRetryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isPlayingRef = useRef<boolean>(false);
+  const lastCurrentTimeRef = useRef<number>(0);
+  const timeUpdateCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isManualPauseForResumeRef = useRef<boolean>(false);
+  const preloadAudioRef = useRef<HTMLAudioElement | null>(null);
+  const isFirstMountRef = useRef<boolean>(true);
 
-  // Когда меняется текущий трек, загружаю новый аудио файл
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
     if (currentTrack) {
-      // Проверяю, не тот ли это уже трек - чтобы не перезагружать без необходимости
       const currentSrc = audio.src || '';
       const trackUrl = currentTrack.track_file;
-      // Сравниваю URL - они могут быть в разных форматах
       if (currentSrc && (currentSrc === trackUrl || currentSrc.endsWith(trackUrl) || trackUrl.endsWith(currentSrc)) && currentSrc !== window.location.href) {
-        return; // Трек уже загружен, ничего не делаю
+        return;
       }
 
-      // Останавливаю текущее воспроизведение
       audio.pause();
-      // Сбрасываю время перед загрузкой нового трека
       setCurrentTime(0);
       dispatch(setCurrentTimeAction(0));
       setDuration(0);
       dispatch(setDurationAction(0));
-      // Устанавливаю новый источник
-      audio.src = currentTrack.track_file;
+
+      let trackUrlToSet = currentTrack.track_file;
+      if (trackUrlToSet && !trackUrlToSet.startsWith('http') && !trackUrlToSet.startsWith('//')) {
+        if (!trackUrlToSet.startsWith('/')) {
+          trackUrlToSet = '/' + trackUrlToSet;
+        }
+      }
+
+      audio.src = trackUrlToSet;
       audio.preload = 'auto';
-      // Сбрасываю таймер для кнопки "назад"
       lastPrevClickTime.current = 0;
       audio.load();
+
+      if (playlist.length > 0) {
+        const currentIndex = playlist.findIndex((track) => track._id === currentTrack._id);
+        if (currentIndex !== -1 && currentIndex < playlist.length - 1) {
+          const nextTrack = playlist[currentIndex + 1];
+          if (nextTrack && nextTrack.track_file) {
+            if (!preloadAudioRef.current) {
+              preloadAudioRef.current = document.createElement('audio');
+              preloadAudioRef.current.style.display = 'none';
+              preloadAudioRef.current.preload = 'auto';
+              document.body.appendChild(preloadAudioRef.current);
+            }
+
+            let nextTrackUrl = nextTrack.track_file;
+            if (nextTrackUrl && !nextTrackUrl.startsWith('http') && !nextTrackUrl.startsWith('//')) {
+              if (!nextTrackUrl.startsWith('/')) {
+                nextTrackUrl = '/' + nextTrackUrl;
+              }
+            }
+
+            if (preloadAudioRef.current.src !== nextTrackUrl) {
+              preloadAudioRef.current.src = nextTrackUrl;
+              preloadAudioRef.current.load();
+            }
+          }
+        }
+      }
     } else {
-      // Если трек не выбран, очищаю источник
       audio.pause();
       audio.removeAttribute('src');
       audio.load();
@@ -82,10 +111,26 @@ export default function PlayerBar({
       setDuration(0);
       dispatch(setDurationAction(0));
       isPlayingRef.current = false;
-    }
-  }, [currentTrack, dispatch]);
 
-  // Управляю play/pause в зависимости от состояния isPlaying из Redux
+      if (preloadAudioRef.current) {
+        preloadAudioRef.current.pause();
+        preloadAudioRef.current.removeAttribute('src');
+        preloadAudioRef.current.load();
+      }
+    }
+
+    return () => {
+      if (preloadAudioRef.current) {
+        preloadAudioRef.current.pause();
+        preloadAudioRef.current.removeAttribute('src');
+        if (preloadAudioRef.current.parentNode) {
+          preloadAudioRef.current.parentNode.removeChild(preloadAudioRef.current);
+        }
+        preloadAudioRef.current = null;
+      }
+    };
+  }, [currentTrack, dispatch, playlist]);
+
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !currentTrack) {
@@ -93,26 +138,33 @@ export default function PlayerBar({
       return;
     }
 
+    if (isFirstMountRef.current) {
+      isFirstMountRef.current = false;
+      if (isPlaying) {
+        dispatch(setIsPlaying(false));
+        isPlayingRef.current = false;
+        if (!audio.paused) {
+          audio.pause();
+        }
+        return;
+      }
+    }
+
     isPlayingRef.current = isPlaying;
 
     if (isPlaying) {
-      // Если уже играет, ничего не делаю
       if (!audio.paused && audio.readyState >= 2) {
         return;
       }
 
-      // Функция для попытки запуска воспроизведения
       const tryPlay = () => {
-        // Проверяю, что трек все еще актуален
         if (!isPlayingRef.current || !currentTrack) return;
-        
-        // Проверяю, что источник совпадает с текущим треком
+
         const currentSrc = audio.src || '';
         const trackUrl = currentTrack.track_file;
         const srcMatches = currentSrc === trackUrl || currentSrc.endsWith(trackUrl) || trackUrl.endsWith(currentSrc);
         if (!srcMatches) return;
-        
-        // readyState >= 2 означает, что есть достаточно данных для воспроизведения
+
         if (audio.readyState >= 2) {
           const playPromise = audio.play();
           if (playPromise !== undefined) {
@@ -121,20 +173,14 @@ export default function PlayerBar({
                 isPlayingRef.current = true;
               })
               .catch((error) => {
-                // AbortError - это нормально при быстром переключении треков
-                if (error.name !== 'AbortError' && process.env.NODE_ENV === 'development') {
-                  console.error('Ошибка воспроизведения:', error);
-                }
                 isPlayingRef.current = false;
               });
           }
         }
       };
 
-      // Пытаюсь запустить сразу, если аудио уже готово
       tryPlay();
-      
-      // Если еще не готово, подписываемся на canplay
+
       const handleCanPlayForPlay = () => {
         tryPlay();
         audio.removeEventListener('canplay', handleCanPlayForPlay);
@@ -148,7 +194,6 @@ export default function PlayerBar({
         audio.removeEventListener('canplay', handleCanPlayForPlay);
       };
     } else {
-      // Если isPlaying false - ставим на паузу
       if (!audio.paused) {
         audio.pause();
       }
@@ -156,27 +201,24 @@ export default function PlayerBar({
     }
   }, [isPlaying, currentTrack]);
 
-  // Включаем/выключаем зацикливание трека
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
-    audio.loop = isLooping; // просто устанавливаем свойство loop
+    audio.loop = isLooping;
   }, [isLooping]);
 
-  // Настраиваем обработчики событий для audio элемента
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
-    // Обновляем время каждую секунду (примерно)
     const handleTimeUpdate = () => {
       const time = audio.currentTime;
-      setCurrentTime(time); // обновляем локальное состояние
-      dispatch(setCurrentTimeAction(time)); // и в Redux для других компонентов
+      lastCurrentTimeRef.current = time;
+      setCurrentTime(time);
+      dispatch(setCurrentTimeAction(time));
     };
 
-    // Когда загрузились метаданные (длительность трека)
     const handleLoadedMetadata = () => {
       const dur = audio.duration;
       if (isFinite(dur) && !isNaN(dur) && dur > 0) {
@@ -185,20 +227,15 @@ export default function PlayerBar({
       }
     };
 
-    // Когда аудио готово к воспроизведению
     const handleCanPlay = () => {
-      // Проверяем, что трек все еще текущий
       if (!currentTrack) return;
-      
-      // Нормализуем URL для сравнения
+
       const currentSrc = audio.src || '';
       const trackUrl = currentTrack.track_file;
       const srcMatches = currentSrc === trackUrl || currentSrc.endsWith(trackUrl) || trackUrl.endsWith(currentSrc);
-      
-      if (!srcMatches) return; // Это не наш трек
-      
-      // Если трек должен играть и аудио готово, начинаем воспроизведение
-      // Используем isPlayingRef.current для актуального значения
+
+      if (!srcMatches) return;
+
       if (isPlayingRef.current && audio.readyState >= 2 && audio.paused) {
         const playPromise = audio.play();
         if (playPromise !== undefined) {
@@ -206,29 +243,16 @@ export default function PlayerBar({
             .then(() => {
               isPlayingRef.current = true;
             })
-            .catch((error) => {
-              // AbortError можно игнорировать - это когда загрузка прервалась
-              if (
-                error.name !== 'AbortError' &&
-                process.env.NODE_ENV === 'development'
-              ) {
-                console.error('Ошибка воспроизведения в canplay:', error);
-              }
+            .catch(() => {
               isPlayingRef.current = false;
             });
         }
       }
     };
 
-    // Обработка ошибок загрузки
     const handleError = (e: Event) => {
       const audio = e.target as HTMLAudioElement;
       if (audio.error) {
-        // Коды ошибок:
-        // 1 = MEDIA_ERR_ABORTED - загрузка прервана
-        // 2 = MEDIA_ERR_NETWORK - ошибка сети
-        // 3 = MEDIA_ERR_DECODE - ошибка декодирования
-        // 4 = MEDIA_ERR_SRC_NOT_SUPPORTED - формат не поддерживается
         const errorMessages = {
           1: 'Загрузка прервана',
           2: 'Ошибка сети. Проверьте подключение к интернету',
@@ -237,142 +261,282 @@ export default function PlayerBar({
         };
         const errorCode = audio.error.code;
         const errorMessage = errorMessages[errorCode as keyof typeof errorMessages] || 'Неизвестная ошибка';
-        
-        if (process.env.NODE_ENV === 'development') {
-          console.error('Ошибка загрузки аудио:', {
-            code: errorCode,
-            message: errorMessage,
-            src: audio.src,
-            error: audio.error,
-          });
-        }
-        
-        // Если произошла ошибка, сбрасываем состояние воспроизведения
+
         dispatch(setIsPlaying(false));
         isPlayingRef.current = false;
-        
-        // Показываем предупреждение только для критических ошибок (не для прерванной загрузки)
-        if (errorCode !== 1 && process.env.NODE_ENV === 'development') {
-          console.warn(`Не удалось загрузить трек: ${errorMessage}`);
-        }
       }
     };
 
-    // Обработчик события pause - НЕ используем, чтобы избежать конфликтов
-    // Мы управляем паузой через isPlaying в Redux
-    
-    // Обработчик события play - обновляем ref когда аудио начинает играть
     const handlePlay = () => {
       if (!audio.paused) {
         isPlayingRef.current = true;
       }
     };
 
-    // Обработчик события waiting - когда трек останавливается из-за нехватки данных
     const handleWaiting = () => {
-      // Если трек должен играть, но остановился из-за нехватки данных,
-      // ждем когда данные загрузятся и продолжаем
       if (isPlayingRef.current) {
         const handleCanPlayAfterWaiting = () => {
-          if (isPlayingRef.current && audio.paused && audio.readyState >= 2) {
+          if (isPlayingRef.current && audio.paused && !audio.ended && !audio.error && audio.readyState >= 2) {
             const playPromise = audio.play();
             if (playPromise !== undefined) {
-              playPromise.catch((error) => {
-                if (error.name !== 'AbortError' && process.env.NODE_ENV === 'development') {
-                  console.error('Ошибка воспроизведения после waiting:', error);
-                }
+              playPromise
+                .then(() => {
+                })
+                .catch((error) => {
               });
             }
           }
           audio.removeEventListener('canplay', handleCanPlayAfterWaiting);
+          audio.removeEventListener('canplaythrough', handleCanPlayAfterWaiting);
         };
+
         audio.addEventListener('canplay', handleCanPlayAfterWaiting);
+        audio.addEventListener('canplaythrough', handleCanPlayAfterWaiting);
       }
     };
 
-    // Подписываемся на события
+    const handlePause = () => {
+      if (isManualPauseForResumeRef.current) {
+        isManualPauseForResumeRef.current = false;
+        return;
+      }
+
+      if (isPlayingRef.current && audio.paused) {
+        if (!audio.ended && !audio.error && audio.currentTime < audio.duration - 0.5) {
+          setTimeout(() => {
+            if (isPlayingRef.current && audio.paused && !audio.ended && !audio.error) {
+              const playPromise = audio.play();
+              if (playPromise !== undefined) {
+                playPromise.catch(() => {
+                  dispatch(setIsPlaying(false));
+                  isPlayingRef.current = false;
+                });
+              }
+            }
+          }, 100);
+        } else {
+          if (audio.ended) {
+            dispatch(setIsPlaying(false));
+            isPlayingRef.current = false;
+          }
+        }
+      }
+    };
+
+    const handleEnded = () => {
+      dispatch(setIsPlaying(false));
+      isPlayingRef.current = false;
+    };
+
+    const handleStalled = () => {
+      if (stalledRetryTimeoutRef.current) {
+        clearTimeout(stalledRetryTimeoutRef.current);
+      }
+
+      if (isPlayingRef.current || isPlaying) {
+        const tryResume = () => {
+          if (!audio || !currentTrack) {
+            return;
+          }
+
+          const currentSrc = audio.src || '';
+          const trackUrl = currentTrack.track_file;
+          const srcMatches = currentSrc === trackUrl || currentSrc.endsWith(trackUrl) || trackUrl.endsWith(currentSrc);
+          if (!srcMatches) {
+            return;
+          }
+
+          const shouldPlay = isPlayingRef.current || isPlaying;
+          const isActuallyPaused = audio.paused;
+          const hasNetworkIssues = audio.readyState < 3 || audio.networkState === 2;
+          const shouldResume = shouldPlay && !audio.ended && !audio.error && (isActuallyPaused || hasNetworkIssues);
+
+          if (shouldResume) {
+            if (audio.readyState >= 2) {
+              if (!audio.paused && hasNetworkIssues) {
+                isManualPauseForResumeRef.current = true;
+                audio.pause();
+                const handleCanPlayAfterManualPause = () => {
+                  if (isPlayingRef.current || isPlaying) {
+                    const playPromise = audio.play();
+                    if (playPromise !== undefined) {
+                        playPromise
+                          .then(() => {
+                            isPlayingRef.current = true;
+                            setTimeout(() => {
+                              if (audio.paused && (isPlayingRef.current || isPlaying) && !audio.ended && !audio.error) {
+                                audio.play().catch(() => {});
+                              }
+                            }, 300);
+                          })
+                          .catch(() => {
+                            if (isPlayingRef.current || isPlaying) {
+                            stalledRetryTimeoutRef.current = setTimeout(tryResume, 500);
+                          }
+                        });
+                    }
+                  }
+                  audio.removeEventListener('canplay', handleCanPlayAfterManualPause);
+                  audio.removeEventListener('canplaythrough', handleCanPlayAfterManualPause);
+                };
+                
+                audio.addEventListener('canplay', handleCanPlayAfterManualPause);
+                audio.addEventListener('canplaythrough', handleCanPlayAfterManualPause);
+
+                const handleProgressForResume = () => {
+                  if (audio.buffered.length > 0) {
+                    const bufferedEnd = audio.buffered.end(audio.buffered.length - 1);
+                    if (bufferedEnd > audio.currentTime + 0.5) {
+                      handleCanPlayAfterManualPause();
+                      audio.removeEventListener('progress', handleProgressForResume);
+                    }
+                  }
+                };
+                audio.addEventListener('progress', handleProgressForResume);
+                
+                if (audio.readyState >= 2) {
+                  setTimeout(() => {
+                    handleCanPlayAfterManualPause();
+                  }, 100);
+                }
+
+                setTimeout(() => {
+                  if (isPlayingRef.current || isPlaying) {
+                    handleCanPlayAfterManualPause();
+                  }
+                  audio.removeEventListener('progress', handleProgressForResume);
+                }, 2000);
+              } else {
+                const playPromise = audio.play();
+                if (playPromise !== undefined) {
+                  playPromise
+                    .then(() => {
+                      isPlayingRef.current = true;
+                      setTimeout(() => {
+                        if (audio.paused && (isPlayingRef.current || isPlaying)) {
+                          audio.play().catch(() => {});
+                        }
+                      }, 200);
+                    })
+                    .catch(() => {
+                      if (isPlayingRef.current || isPlaying) {
+                        stalledRetryTimeoutRef.current = setTimeout(tryResume, 500);
+                      }
+                    });
+                }
+              }
+            } else {
+              stalledRetryTimeoutRef.current = setTimeout(tryResume, 500);
+            }
+          }
+        };
+
+        const handleCanPlayAfterStalled = () => {
+          tryResume();
+          audio.removeEventListener('canplay', handleCanPlayAfterStalled);
+          audio.removeEventListener('canplaythrough', handleCanPlayAfterStalled);
+        };
+
+        audio.addEventListener('canplay', handleCanPlayAfterStalled);
+        audio.addEventListener('canplaythrough', handleCanPlayAfterStalled);
+        stalledRetryTimeoutRef.current = setTimeout(tryResume, 300);
+      }
+    };
+
+    const handleSuspend = () => {};
+
+    const handleAbort = () => {};
+
+    const handleLoadStart = () => {};
+
+    const handleCanPlayThrough = () => {};
+
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
     audio.addEventListener('canplay', handleCanPlay);
+    audio.addEventListener('canplaythrough', handleCanPlayThrough);
     audio.addEventListener('error', handleError);
     audio.addEventListener('play', handlePlay);
     audio.addEventListener('waiting', handleWaiting);
+    audio.addEventListener('pause', handlePause);
+    audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('stalled', handleStalled);
+    audio.addEventListener('suspend', handleSuspend);
+    audio.addEventListener('abort', handleAbort);
+    audio.addEventListener('loadstart', handleLoadStart);
 
-    // Cleanup - обязательно удаляем обработчики при размонтировании
     return () => {
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('canplay', handleCanPlay);
+      audio.removeEventListener('canplaythrough', handleCanPlayThrough);
       audio.removeEventListener('error', handleError);
       audio.removeEventListener('play', handlePlay);
       audio.removeEventListener('waiting', handleWaiting);
-    };
-  }, [currentTrack, isPlaying, dispatch]);
+      audio.removeEventListener('pause', handlePause);
+      audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('stalled', handleStalled);
+      audio.removeEventListener('suspend', handleSuspend);
+      audio.removeEventListener('abort', handleAbort);
+      audio.removeEventListener('loadstart', handleLoadStart);
 
-  // Когда трек закончился
+      if (stalledRetryTimeoutRef.current) {
+        clearTimeout(stalledRetryTimeoutRef.current);
+      }
+    };
+  }, [currentTrack, isPlaying, dispatch, onNextTrack]);
+
   const handleEnded = () => {
-    // Если режим повтора выключен, переключаемся на следующий трек
     if (!isLooping) {
       onNextTrack();
     }
-    // Иначе трек зациклится сам (через свойство loop)
   };
 
-  // Переключаем режим повтора
   const handleToggleLoop = () => {
     setIsLooping(!isLooping);
   };
 
-  // Обработчик клика на прогресс-бар для перемотки
   const handleProgressChange = (e: React.MouseEvent<HTMLDivElement>) => {
     const audio = audioRef.current;
     if (!audio || !currentTrack) return;
 
-    // Получаем координаты клика относительно прогресс-бара
     const progressBar = e.currentTarget;
     const rect = progressBar.getBoundingClientRect();
-    const clickX = e.clientX - rect.left; // расстояние от левого края
-    const percentage = clickX / rect.width; // процент от общей ширины
-    const newTime = percentage * duration; // вычисляем новое время
+    const clickX = e.clientX - rect.left;
+    const percentage = clickX / rect.width;
+    const newTime = percentage * duration;
 
-    // Устанавливаем новое время
     audio.currentTime = newTime;
     setCurrentTime(newTime);
     dispatch(setCurrentTimeAction(newTime));
   };
 
-  // Логика кнопки "назад" - как в обычных плеерах
-  // Первый клик - перематывает в начало, второй клик (если быстро) - предыдущий трек
   const handlePrevTrack = () => {
     if (!currentTrack) return;
 
     const audio = audioRef.current;
-    const now = Date.now(); // текущее время в миллисекундах
+    const now = Date.now();
     const timeSinceLastClick = now - lastPrevClickTime.current;
-    const REWIND_THRESHOLD = 3000; // 3 секунды - порог для определения "быстрого" клика
+    const REWIND_THRESHOLD = 3000;
 
-    // Если трек в начале (меньше 3 сек) или кликнули быстро второй раз - переключаем трек
     if (
       currentTime < 3 ||
       (timeSinceLastClick < REWIND_THRESHOLD && lastPrevClickTime.current > 0)
     ) {
-      lastPrevClickTime.current = 0; // сбрасываем таймер
-      onPrevTrack(); // вызываем функцию переключения из пропсов
+      lastPrevClickTime.current = 0;
+      onPrevTrack();
     } else {
-      // Иначе просто перематываем текущий трек в начало
       if (audio) {
         audio.currentTime = 0;
         setCurrentTime(0);
         dispatch(setCurrentTimeAction(0));
       }
-      lastPrevClickTime.current = now; // запоминаем время клика
+      lastPrevClickTime.current = now;
 
-      // Очищаем предыдущий таймер если был
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
 
-      // Через 3 секунды сбрасываем таймер (чтобы следующий клик считался первым)
       timeoutRef.current = setTimeout(() => {
         lastPrevClickTime.current = 0;
         timeoutRef.current = null;
@@ -380,37 +544,29 @@ export default function PlayerBar({
     }
   };
 
-  // Очищаем таймер когда компонент размонтируется (чтобы не было утечек памяти)
   useEffect(() => {
     return () => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
     };
-  }, []); // пустой массив зависимостей = выполнится только при размонтировании
+  }, []);
 
-  // Вычисляем процент прогресса для отображения полосы
   const progressPercentage = duration > 0 ? (currentTime / duration) * 100 : 0;
 
-  // Форматируем секунды в читаемый формат MM:SS
   const formatTime = (seconds: number): string => {
-    // Проверяем что число валидное
     if (!isFinite(seconds) || isNaN(seconds) || seconds < 0) return '0:00';
-    // Округляем до целых секунд
     const roundedSeconds = Math.floor(seconds);
     const mins = Math.floor(roundedSeconds / 60);
     const secs = roundedSeconds % 60;
-    // padStart добавляет ноль в начале если секунд меньше 10
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   return (
     <div className={styles.bar}>
-      {/* Скрытый audio элемент для управления воспроизведением */}
       <audio ref={audioRef} onEnded={handleEnded} style={{ display: 'none' }} />
 
       <div className={styles.content}>
-        {/* Полоса прогресса воспроизведения */}
         <div
           className={styles.playerProgress}
           onClick={handleProgressChange}
@@ -424,9 +580,7 @@ export default function PlayerBar({
 
         <div className={styles.playerBlock}>
           <div className={styles.player}>
-            {/* Блок с кнопками управления плеером */}
             <div className={styles.controls}>
-              {/* Кнопка "Предыдущий трек" */}
               <div
                 className={`${styles.btnPrev} ${styles.btn}`}
                 onClick={currentTrack ? handlePrevTrack : undefined}
@@ -440,7 +594,6 @@ export default function PlayerBar({
                 </svg>
               </div>
 
-              {/* Кнопка "Play/Pause" - основная кнопка управления */}
               <div
                 className={`${styles.btnPlay} ${styles.btn} ${styles.btnIcon} ${
                   isPlaying ? styles.active : ''
@@ -459,7 +612,6 @@ export default function PlayerBar({
                 </svg>
               </div>
 
-              {/* Кнопка "Следующий трек" */}
               <div
                 className={`${styles.btnNext} ${styles.btn}`}
                 onClick={currentTrack ? onNextTrack : undefined}
@@ -473,7 +625,6 @@ export default function PlayerBar({
                 </svg>
               </div>
 
-              {/* Кнопка "Повтор" */}
               <div
                 className={`${styles.btnRepeat} ${styles.btnIcon} ${
                   styles.btn
@@ -486,7 +637,6 @@ export default function PlayerBar({
                 </svg>
               </div>
 
-              {/* Кнопка "Перемешать" */}
               <div
                 className={`${styles.btnShuffle} ${styles.btnIcon} ${
                   styles.btn
@@ -500,24 +650,20 @@ export default function PlayerBar({
               </div>
             </div>
 
-            {/* Блок с информацией о текущем треке */}
             <div className={styles.trackPlay}>
               <div className={styles.contain}>
-                {/* Иконка текущего трека */}
                 <div className={styles.image}>
                   <svg className={styles.svg}>
                     <use href="/img/icon/sprite.svg#icon-note"></use>
                   </svg>
                 </div>
 
-                {/* Название текущего трека */}
                 <div className={styles.author}>
                   <span className={styles.authorLink}>
                     {currentTrack?.name || 'Ты та...'}
                   </span>
                 </div>
 
-                {/* Исполнитель текущего трека */}
                 <div className={styles.album}>
                   <span className={styles.albumLink}>
                     {currentTrack?.author || 'Баста'}
@@ -525,7 +671,6 @@ export default function PlayerBar({
                 </div>
               </div>
 
-              {/* Кнопки лайка и дизлайка */}
               <div className={styles.dislike}>
                 <div
                   className={`${styles.btnShuffle} ${styles.btnIcon} ${styles.btn}`}
@@ -553,10 +698,8 @@ export default function PlayerBar({
             </div>
           </div>
 
-          {/* Блок управления громкостью */}
           <div className={styles.volumeBlock}>
             <div className={styles.volumeContent}>
-              {/* Отображение времени проигрывания */}
               <div className={styles.timeContainer}>
                 <span className={styles.timeText}>
                   <span className={styles.timeTextPart}>
@@ -569,14 +712,12 @@ export default function PlayerBar({
                 </span>
               </div>
 
-              {/* Иконка громкости */}
               <div className={styles.volumeImage}>
                 <svg className={styles.volumeSvg}>
                   <use href="/img/icon/sprite.svg#icon-volume"></use>
                 </svg>
               </div>
 
-              {/* Ползунок громкости */}
               <div className={`${styles.volumeProgress} ${styles.btn}`}>
                 <input
                   className={`${styles.volumeProgressLine} ${styles.btn}`}

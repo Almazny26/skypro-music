@@ -13,10 +13,9 @@ interface AuthModalProps {
   onClose: () => void;
 }
 
-// Модальное окно для входа/регистрации - показывается, если пользователь не авторизован
 export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const router = useRouter();
-  const [isSignIn, setIsSignIn] = useState(true); // Переключатель между входом и регистрацией
+  const [isSignIn, setIsSignIn] = useState(true);
   const [error, setError] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -32,14 +31,12 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     const password = formData.get('password') as string;
     const passwordConfirm = formData.get('passwordConfirm') as string;
 
-    // Проверяю, что обязательные поля заполнены
     if (!loginValue || !password) {
       setError('Заполните все поля');
       setIsLoading(false);
       return;
     }
 
-    // Для регистрации дополнительно проверяю подтверждение пароля
     if (!isSignIn) {
       if (!passwordConfirm) {
         setError('Заполните все поля');
@@ -53,7 +50,6 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
       }
     }
 
-    // Валидирую формат email, если пользователь ввел email
     const isEmail = loginValue.includes('@');
     if (isEmail) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -64,7 +60,6 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
       }
     }
 
-    // Проверяю минимальную длину пароля
     if (password.length < 6) {
       setError('Пароль должен содержать минимум 6 символов');
       setIsLoading(false);
@@ -73,16 +68,14 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
     try {
       if (isSignIn) {
-        // Логика входа - определяю, что ввел пользователь (email или username)
         const isEmail = loginValue.includes('@');
         const credentials = isEmail
           ? { email: loginValue, password }
           : { username: loginValue, password };
-        
+
         const response = await login(credentials);
         setToken(response.access);
-        
-        // Определяю username для сохранения - логика такая же, как на странице входа
+
         let usernameToSave: string;
         if (response.username) {
           usernameToSave = response.username;
@@ -93,10 +86,9 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
         } else {
           usernameToSave = 'Пользователь';
         }
-        
+
         setUserInfo(usernameToSave, response.email || loginValue);
-        
-        // Дополнительная проверка сохранения
+
         setTimeout(() => {
           const savedUsername = localStorage.getItem('username');
           if (!savedUsername || savedUsername === 'undefined' || savedUsername === 'null') {
@@ -104,10 +96,9 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
           }
         }, 50);
       } else {
-        // Логика регистрации
         const response = await register({ email: loginValue, password });
         setToken(response.access);
-        
+
         let usernameToSave: string;
         if (response.username) {
           usernameToSave = response.username;
@@ -116,9 +107,9 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
         } else {
           usernameToSave = 'Пользователь';
         }
-        
+
         setUserInfo(usernameToSave, response.email || loginValue);
-        
+
         setTimeout(() => {
           const savedUsername = localStorage.getItem('username');
           if (!savedUsername || savedUsername === 'undefined' || savedUsername === 'null') {
@@ -127,11 +118,8 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
         }, 50);
       }
 
-      // После успешной авторизации закрываю модалку
-      // Компоненты обновятся через событие localStorageChange
       onClose();
     } catch (err) {
-      // Показываю ошибку пользователю
       let errorMessage = isSignIn 
         ? 'Произошла ошибка при входе'
         : 'Произошла ошибка при регистрации';

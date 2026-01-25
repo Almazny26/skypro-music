@@ -7,57 +7,54 @@ import { useRouter } from 'next/navigation';
 import styles from './Navigation.module.css';
 import { getToken, removeToken } from '@/api/api';
 
-// Левая боковая панель с логотипом и меню
+// Компонент навигации
 export default function Navigation() {
   const router = useRouter();
-  // Состояние меню - по умолчанию закрыто
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  // Проверяю авторизацию при загрузке и слушаю изменения
+  // Проверка авторизации при загрузке и изменении токена
   useEffect(() => {
     const checkAuth = () => {
       const token = getToken();
-      setIsAuthenticated(!!token); // Есть токен = авторизован
+      setIsAuthenticated(!!token);
     };
-    
-    // Проверяю сразу при монтировании
+
     checkAuth();
-    
-    // Слушаю изменения в других вкладках браузера
+
+    // Слушаем изменения в localStorage
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'accessToken') {
         checkAuth();
       }
     };
 
-    // Слушаю изменения в текущей вкладке (при входе/выходе)
     const handleCustomStorageChange = () => {
       checkAuth();
     };
 
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener('localStorageChange', handleCustomStorageChange);
-    
-    // Cleanup
+
+    // Очистка слушателей
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('localStorageChange', handleCustomStorageChange);
     };
   }, []);
 
-  // Открываю/закрываю меню по клику на бургер
+  // Открытие/закрытие меню
   const handleBurgerClick = () => {
     setIsMenuOpen(!isMenuOpen);
   };
 
-  // Пока пункты меню не реализованы
+  // Обработчик клика по пункту меню
   const handleMenuClick = (e: React.MouseEvent) => {
     e.preventDefault();
     alert('Еще не реализовано');
   };
 
-  // Выход из аккаунта - очищаю токен и редирект на страницу входа
+  // Выход из аккаунта
   const handleLogout = (e: React.MouseEvent) => {
     e.preventDefault();
     removeToken();
@@ -67,9 +64,7 @@ export default function Navigation() {
 
   return (
     <nav className={styles.nav}>
-      {/* Блок с логотипом приложения */}
-      <div className={styles.logo}>
-        {/* Image из Next.js автоматически оптимизирует изображения */}
+      <Link href="/" className={styles.logo}>
         <Image
           width={113}
           height={17}
@@ -77,20 +72,17 @@ export default function Navigation() {
           src="/img/logo.png"
           alt="logo"
         />
-      </div>
-      
-      {/* Бургер-меню с обработчиком клика */}
+      </Link>
+
       <div className={`${styles.burger} ${isMenuOpen ? styles.burgerOpen : ''}`} onClick={handleBurgerClick}>
         <span className={styles.burgerLine}></span>
         <span className={styles.burgerLine}></span>
         <span className={styles.burgerLine}></span>
       </div>
-      
-      {/* Меню навигации - показывается/скрывается в зависимости от состояния */}
+
       <div className={`${styles.menu} ${!isMenuOpen ? styles.menuClosed : ''}`}>
         <ul className={styles.menuList}>
           <li className={styles.menuItem}>
-            {/* Link из Next.js обеспечивает клиентскую навигацию без перезагрузки страницы */}
             <Link href="/" className={styles.menuLink}>
               Главное
             </Link>

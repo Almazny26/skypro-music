@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import {
   setCurrentTrack,
@@ -9,7 +9,7 @@ import {
   setPlaylist,
 } from '@/store/trackSlice';
 import type { Track } from '@/api/api';
-import { getTracks } from '@/api/api';
+import { getTracks, getCompilation } from '@/api/api';
 import Navigation from '@/components/Navigation';
 import Search from '@/components/Search';
 import Filter from '@/components/Filter';
@@ -18,95 +18,230 @@ import Sidebar from '@/components/Sidebar';
 import PlayerBar from '@/components/PlayerBar';
 import styles from './page.module.css';
 
+// Типы для пропсов компонента
 interface MainLayoutProps {
   tracks?: Track[];
   error?: string | null;
   compilationId?: number;
 }
 
-// Главный layout, который используется и на главной странице, и на странице подборок
-// Принимает треки из пропсов, если они есть (например, с сервера), или загружает сам
+// Главный компонент приложения
 export default function MainLayout({
   tracks: initialTracks,
   error: initialError,
   compilationId,
 }: MainLayoutProps = {}) {
+  // Redux хуки для работы со store
   const dispatch = useAppDispatch();
   const currentTrack = useAppSelector((state) => state.track.currentTrack);
   const isPlaying = useAppSelector((state) => state.track.isPlaying);
   const playlist = useAppSelector((state) => state.track.playlist);
 
-  // Локальные состояния для управления плеером и фильтрами
+  // Локальное состояние компонента
   const [isShuffled, setIsShuffled] = useState(false);
-  const [playedTracks, setPlayedTracks] = useState<number[]>([]); // Для режима перемешивания
-  const [likedTracks, setLikedTracks] = useState<number[]>([]); // ID треков, которые лайкнул пользователь
+  const [playedTracks, setPlayedTracks] = useState<number[]>([]);
+  const [likedTracks, setLikedTracks] = useState<number[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [tracks, setTracks] = useState<Track[]>(initialTracks || []);
   const [error, setError] = useState<string | null>(initialError || null);
-  const [isLoading, setIsLoading] = useState(!initialTracks); // Если треки переданы, не показываю лоадер
+  const [compilationName, setCompilationName] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(initialTracks === undefined);
+  // useRef для хранения значений между рендерами
+  const compilationIdRef = useRef<number | undefined>(compilationId);
+  const requestCounterRef = useRef<number>(0);
+  const isFirstMountRef = useRef<boolean>(true);
 
-  // Загружаю треки, если они не были переданы из пропсов (например, на главной странице)
+  // Если треки переданы извне, используем их
   useEffect(() => {
-    // Если треки уже есть (например, пришли с сервера на странице подборок), просто использую их
-    if (initialTracks && initialTracks.length > 0) {
+    if (initialTracks !== undefined) {
       setTracks(initialTracks);
+      setError(initialError || null);
       setIsLoading(false);
       return;
     }
+  }, [initialTracks, initialError]);
 
-    // Флаг для отмены запроса, если компонент размонтировался
+  // Загрузка треков с сервера
+  useEffect(() => {
+    if (initialTracks !== undefined) {
+      return;
+    }
+
+    // Флаг для отмены запроса если компонент размонтирован
     let cancelled = false;
+    compilationIdRef.current = compilationId;
+    requestCounterRef.current += 1;
+    const currentRequestId = requestCounterRef.current;
+    const currentCompilationId = compilationId;
 
+    // Асинхронная функция загрузки треков
     const loadTracks = async () => {
       setIsLoading(true);
       setError(null);
-      try {
-        const loadedTracks = await getTracks();
-        // Проверяю, не размонтировался ли компонент во время загрузки
-        if (cancelled) return;
 
-        if (!loadedTracks || loadedTracks.length === 0) {
-          setError('Треки не найдены. Возможно, требуется авторизация.');
+      // Маппинг названий подборок
+      const compilationNames: Record<number, string> = {
+        1: 'Плейлист дня',
+        2: '100 танцевальных хитов',
+        3: 'Инди-заряд',
+      };
+
+      // Устанавливаем название подборки
+      if (
+        currentCompilationId !== undefined &&
+        currentCompilationId !== null &&
+        !isNaN(currentCompilationId)
+      ) {
+        const mappedName =
+          compilationNames[currentCompilationId] ||
+          `Подборка ${currentCompilationId}`;
+        setCompilationName(mappedName);
+      }
+
+      try {
+        let loadedTracks: Track[];
+        let compilationNameToSet: string | null = null;
+
+        // Загружаем подборку или все треки
+        if (
+          currentCompilationId !== undefined &&
+          currentCompilationId !== null &&
+          !isNaN(currentCompilationId)
+        ) {
+          const compilation = await getCompilation(currentCompilationId);
+          loadedTracks = compilation.tracks || [];
+
+          // Если треков нет, но есть items, загружаем все треки и фильтруем
+          if (
+            loadedTracks.length === 0 &&
+            compilation.items &&
+            compilation.items.length > 0
+          ) {
+            if (cancelled) return;
+            if (currentRequestId !== requestCounterRef.current) return;
+            if (currentCompilationId !== compilationIdRef.current) return;
+
+            try {
+              const allTracks = await getTracks();
+
+              if (cancelled) return;
+              if (currentRequestId !== requestCounterRef.current) return;
+              if (currentCompilationId !== compilationIdRef.current) return;
+
+              // Фильтруем треки по items и сортируем по порядку
+              loadedTracks = allTracks.filter((track) =>
+                compilation.items!.includes(track._id),
+              );
+              const itemsOrder = compilation.items;
+              loadedTracks.sort((a, b) => {
+                const indexA = itemsOrder!.indexOf(a._id);
+                const indexB = itemsOrder!.indexOf(b._id);
+                return indexA - indexB;
+              });
+            } catch (err) {
+              if (cancelled) return;
+              if (currentRequestId !== requestCounterRef.current) return;
+              if (currentCompilationId !== compilationIdRef.current) return;
+            }
+          }
+
+          // Устанавливаем название подборки
+          if (currentCompilationId && compilationNames[currentCompilationId]) {
+            compilationNameToSet = compilationNames[currentCompilationId];
+          } else if (currentCompilationId) {
+            compilationNameToSet =
+              compilation.name && compilation.name.trim()
+                ? compilation.name
+                : `Подборка ${currentCompilationId}`;
+          } else {
+            compilationNameToSet = null;
+          }
         } else {
-          setTracks(loadedTracks);
+          // Загружаем все треки если нет подборки
+          loadedTracks = await getTracks();
+          compilationNameToSet = null;
         }
+
+        // Проверки на актуальность запроса
+        if (cancelled) {
+          setIsLoading(false);
+          return;
+        }
+
+        if (currentRequestId !== requestCounterRef.current) {
+          setIsLoading(false);
+          return;
+        }
+
+        if (currentCompilationId !== compilationIdRef.current) {
+          setIsLoading(false);
+          return;
+        }
+
+        // Сохраняем загруженные треки
+        setTracks(loadedTracks || []);
+        if (
+          currentRequestId === requestCounterRef.current &&
+          currentCompilationId === compilationIdRef.current
+        ) {
+          setCompilationName(compilationNameToSet);
+        }
+        setError(null);
       } catch (err) {
         if (cancelled) return;
-        // Логирую только в dev режиме, чтобы не засорять консоль в production
-        if (process.env.NODE_ENV === 'development') {
-          console.error('Ошибка загрузки треков:', err);
-        }
+        // Обработка ошибок
         const errorMessage =
           err instanceof Error
             ? err.message
             : 'Произошла ошибка при загрузке треков';
         setError(errorMessage);
+        setTracks([]);
+        setCompilationName(null);
       } finally {
-        if (!cancelled) {
-          setIsLoading(false);
-        }
+        setIsLoading(false);
       }
     };
 
     loadTracks();
 
-    // Cleanup функция - отменяю запрос при размонтировании
+    // Очистка при размонтировании
     return () => {
       cancelled = true;
+      requestCounterRef.current += 1;
     };
-  }, [initialTracks]);
+  }, [initialTracks, compilationId]);
 
-  // Когда треки загрузились, отправляю их в Redux store для плейлиста
+  // Сбрасываем воспроизведение при первом монтировании
   useEffect(() => {
-    if (Array.isArray(tracks) && tracks.length > 0) {
-      dispatch(setPlaylist(tracks));
+    if (isFirstMountRef.current) {
+      isFirstMountRef.current = false;
+      if (isPlaying) {
+        dispatch(setIsPlaying(false));
+      }
     }
-  }, [tracks, dispatch]);
+  }, [dispatch, isPlaying]);
 
-  // Фильтрую треки по поисковому запросу - ищу в названии, авторе и альбоме
+  // Обновляем ref при изменении compilationId
   useEffect(() => {
-    if (!Array.isArray(tracks) || tracks.length === 0) return;
+    compilationIdRef.current = compilationId;
 
+    if (
+      compilationId === undefined ||
+      compilationId === null ||
+      isNaN(compilationId)
+    ) {
+      setCompilationName(null);
+    }
+  }, [compilationId]);
+
+  // Фильтрация треков по поисковому запросу
+  useEffect(() => {
+    if (!Array.isArray(tracks)) {
+      dispatch(setPlaylist([]));
+      return;
+    }
+
+    // Фильтруем по названию, автору или альбому
     const filtered = searchQuery
       ? tracks.filter(
           (track) =>
@@ -118,46 +253,44 @@ export default function MainLayout({
     dispatch(setPlaylist(filtered));
   }, [searchQuery, tracks, dispatch]);
 
-  // Когда кликают на трек в списке - либо запускаю его, либо ставлю на паузу, если он уже играет
+  // Обработчик выбора трека
   const handleTrackSelect = (track: Track) => {
     if (currentTrack?._id === track._id) {
-      // Если это текущий трек - просто переключаю play/pause
+      // Если выбран текущий трек, пауза/плей
       dispatch(togglePlayPause());
     } else {
-      // Иначе запускаю новый трек
+      // Иначе выбираем новый трек
       dispatch(setCurrentTrack(track));
       dispatch(setIsPlaying(true));
-      // Если включен shuffle, сбрасываю список проигранных треков
       if (isShuffled) {
         setPlayedTracks([track._id]);
       }
     }
   };
 
-  // Обработчик кнопки play/pause в плеере
+  // Обработчик плей/паузы
   const handlePlayPause = () => {
-    // Если трека нет, но есть плейлист - запускаю первый трек
     if (!currentTrack && playlist.length > 0) {
+      // Если нет текущего трека, играем первый
       dispatch(setCurrentTrack(playlist[0]));
       dispatch(setIsPlaying(true));
     } else if (currentTrack) {
-      // Иначе просто переключаю состояние
       dispatch(togglePlayPause());
     }
   };
 
-  // Получаю следующий трек - учитываю режим shuffle
+  // Получить следующий трек
   const getNextTrack = (): Track | null => {
     if (!currentTrack) return null;
 
     if (isShuffled) {
-      // В режиме перемешивания выбираю случайный трек из непроигранных
+      // Режим перемешивания
       const unplayedTracks = playlist.filter(
         (track) => !playedTracks.includes(track._id),
       );
 
-      // Если все треки проиграны - сбрасываю список и выбираю случайный
       if (unplayedTracks.length === 0) {
+        // Все треки проиграны, начинаем заново
         setPlayedTracks([currentTrack._id]);
         const availableTracks = playlist.filter(
           (track) => track._id !== currentTrack._id,
@@ -172,12 +305,11 @@ export default function MainLayout({
         unplayedTracks[Math.floor(Math.random() * unplayedTracks.length)];
       return randomTrack;
     } else {
-      // В обычном режиме просто беру следующий по порядку
+      // Обычный режим - следующий по порядку
       const currentIndex = playlist.findIndex(
         (track) => track._id === currentTrack._id,
       );
       if (currentIndex !== -1) {
-        // Если это последний трек - следующего нет
         if (currentIndex === playlist.length - 1) {
           return null;
         }
@@ -188,7 +320,7 @@ export default function MainLayout({
     return null;
   };
 
-  // Получаю предыдущий трек - всегда по порядку, shuffle не влияет
+  // Получить предыдущий трек
   const getPrevTrack = (): Track | null => {
     if (!currentTrack) return null;
 
@@ -196,7 +328,6 @@ export default function MainLayout({
       (track) => track._id === currentTrack._id,
     );
     if (currentIndex !== -1) {
-      // Если это первый трек - предыдущего нет
       if (currentIndex === 0) {
         return null;
       }
@@ -206,13 +337,12 @@ export default function MainLayout({
     return null;
   };
 
-  // Обработчик кнопки "следующий трек" в плеере
+  // Переключение на следующий трек
   const handleNextTrack = () => {
     if (!currentTrack) return;
 
     const nextTrack = getNextTrack();
     if (nextTrack) {
-      // Если shuffle включен, добавляю текущий трек в список проигранных
       if (isShuffled) {
         setPlayedTracks((prev) => [...prev, currentTrack._id]);
       }
@@ -221,7 +351,7 @@ export default function MainLayout({
     }
   };
 
-  // Обработчик кнопки "предыдущий трек" в плеере
+  // Переключение на предыдущий трек
   const handlePrevTrack = () => {
     if (!currentTrack) return;
 
@@ -232,10 +362,9 @@ export default function MainLayout({
     }
   };
 
-  // Включаю/выключаю режим перемешивания
+  // Переключение режима перемешивания
   const handleToggleShuffle = () => {
     setIsShuffled(!isShuffled);
-    // При переключении сбрасываю список проигранных треков
     if (currentTrack) {
       setPlayedTracks([currentTrack._id]);
     } else {
@@ -243,7 +372,7 @@ export default function MainLayout({
     }
   };
 
-  // Добавляю/убираю лайк на треке - пока только локально, без сохранения на сервере
+  // Переключение лайка трека
   const handleToggleLike = (trackId: number) => {
     setLikedTracks((prev) => {
       if (prev.includes(trackId)) {
@@ -254,6 +383,7 @@ export default function MainLayout({
     });
   };
 
+  // Обработчик изменения поискового запроса
   const handleSearchChange = (query: string) => {
     setSearchQuery(query);
   };
@@ -262,13 +392,11 @@ export default function MainLayout({
     <div className={styles.wrapper}>
       <div className={styles.container}>
         <main className={styles.main}>
-          {/* Левая навигационная панель с меню */}
           <Navigation />
 
-          {/* Центральный блок с поиском, фильтрами и списком треков */}
           <div className={styles.centerblock}>
             <Search onSearchChange={handleSearchChange} />
-            <h2 className={styles.h2}>Треки</h2>
+            <h2 className={styles.h2}>{compilationName || 'Треки'}</h2>
             <Filter tracks={tracks} />
             {isLoading && (
               <div
@@ -286,7 +414,7 @@ export default function MainLayout({
             )}
             {!isLoading && !error && (
               <Playlist
-                tracks={playlist}
+                tracks={playlist.length > 0 ? playlist : tracks}
                 likedTracks={likedTracks}
                 onTrackSelect={handleTrackSelect}
                 onToggleLike={handleToggleLike}
@@ -294,11 +422,9 @@ export default function MainLayout({
             )}
           </div>
 
-          {/* Правая боковая панель с плейлистами */}
           <Sidebar />
         </main>
 
-        {/* Плеер внизу страницы - фиксированная позиция */}
         <PlayerBar
           isLiked={
             currentTrack ? likedTracks.includes(currentTrack._id) : false
