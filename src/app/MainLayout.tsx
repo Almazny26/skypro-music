@@ -49,7 +49,6 @@ export default function MainLayout({
   // useRef для хранения значений между рендерами
   const compilationIdRef = useRef<number | undefined>(compilationId);
   const requestCounterRef = useRef<number>(0);
-  const isFirstMountRef = useRef<boolean>(true);
 
   // Если треки переданы извне, используем их
   useEffect(() => {
@@ -210,16 +209,6 @@ export default function MainLayout({
       requestCounterRef.current += 1;
     };
   }, [initialTracks, compilationId]);
-
-  // Сбрасываем воспроизведение при первом монтировании
-  useEffect(() => {
-    if (isFirstMountRef.current) {
-      isFirstMountRef.current = false;
-      if (isPlaying) {
-        dispatch(setIsPlaying(false));
-      }
-    }
-  }, [dispatch, isPlaying]);
 
   // Обновляем ref при изменении compilationId
   useEffect(() => {

@@ -1,7 +1,6 @@
 'use client';
 
-import styles from './signin.module.css';
-import classNames from 'classnames';
+import styles from './page.module.css';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useState } from 'react';
@@ -99,7 +98,7 @@ export default function Signin() {
             <Link href="/">
               <div className={styles.modalLogo}>
                 <Image
-                  src="/img/logo_modal.png"
+                  src="/img/logo.png"
                   alt="logo"
                   width={140}
                   height={21}
@@ -108,7 +107,7 @@ export default function Signin() {
             </Link>
 
             <input
-              className={classNames(styles.modalInput, styles.login)}
+              className={styles.modalInput}
               type="email"
               name="login"
               placeholder="Почта"
@@ -116,7 +115,7 @@ export default function Signin() {
             />
 
             <input
-              className={classNames(styles.modalInput)}
+              className={styles.modalInput}
               type="password"
               name="password"
               placeholder="Пароль"

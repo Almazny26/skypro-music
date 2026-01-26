@@ -35,7 +35,7 @@ export interface TracksResponse {
   success?: boolean;
   data?: Track[];
   items?: Track[];
-  [key: string]: any;
+  [key: string]: boolean | Track[] | undefined;
 }
 
 export interface CompilationResponse {
@@ -44,6 +44,23 @@ export interface CompilationResponse {
   owner: string;
   tracks: Track[];
   items?: number[];
+}
+
+interface CompilationAPIResponse {
+  _id?: number;
+  id?: number;
+  name?: string;
+  owner?: string | string[];
+  tracks?: Track[];
+  items?: number[];
+  data?: {
+    _id?: number;
+    id?: number;
+    name?: string;
+    owner?: string | string[];
+    tracks?: Track[];
+    items?: number[];
+  } | null;
 }
 
 export function getToken(): string | null {
@@ -225,21 +242,14 @@ async function fetchAPI<T>(
 }
 
 export async function login(credentials: LoginRequest): Promise<AuthResponse> {
-  let username: string;
-  if (credentials.email) {
-    username = credentials.email.split('@')[0];
-  } else if (credentials.username) {
-    username = credentials.username;
-  } else {
-    username = '';
-  }
+  const email = credentials.email || credentials.username || '';
 
   const requestData = {
-    username: username,
+    email: email,
     password: credentials.password,
   };
 
-  return fetchAPI<AuthResponse>('/user/signin/', {
+  return fetchAPI<AuthResponse>('/user/login/', {
     method: 'POST',
     body: JSON.stringify(requestData),
   });
@@ -295,7 +305,7 @@ export async function getCompilationTracks(
 export async function getCompilation(
   compilationId: number,
 ): Promise<CompilationResponse> {
-  const response = await fetchAPI<any>(`/catalog/selection/${compilationId}/`);
+  const response = await fetchAPI<CompilationAPIResponse>(`/catalog/selection/${compilationId}/`);
 
   if (response && typeof response === 'object') {
     if (response.name !== undefined && response.tracks !== undefined) {

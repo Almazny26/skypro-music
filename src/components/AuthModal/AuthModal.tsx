@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import classNames from 'classnames';
 import { login, register, setToken, setUserInfo } from '@/api/api';
 import styles from './AuthModal.module.css';
 
@@ -143,7 +142,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
           <Link href="/" onClick={onClose}>
             <div className={styles.modalLogo}>
               <Image
-                src="/img/logo_modal.png"
+                src="/img/logo.png"
                 alt="logo"
                 width={140}
                 height={21}
@@ -154,7 +153,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
           {isSignIn ? (
             <>
               <input
-                className={classNames(styles.modalInput, styles.login)}
+                className={styles.modalInput}
                 type="email"
                 name="login"
                 placeholder="Почта"
@@ -171,7 +170,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
           ) : (
             <>
               <input
-                className={classNames(styles.modalInput, styles.login)}
+                className={styles.modalInput}
                 type="email"
                 name="login"
                 placeholder="Почта"

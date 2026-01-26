@@ -16,10 +16,6 @@ interface FilterProps {
 export default function Filter({ tracks = [] }: FilterProps) {
   const dispatch = useAppDispatch();
   const [openFilter, setOpenFilter] = useState<FilterType>(null);
-  const [activeFilter, setActiveFilter] = useState<{
-    type: FilterType;
-    value: string | number | null;
-  }>({ type: null, value: null });
 
   const { uniqueAuthors, uniqueGenres, uniqueYears } = useMemo(() => {
     const authors = new Set<string>();
@@ -70,7 +66,6 @@ export default function Filter({ tracks = [] }: FilterProps) {
     filterType: 'author' | 'year' | 'genre',
     value: string | number
   ) => {
-    setActiveFilter({ type: filterType, value });
     setOpenFilter(null);
 
     if (!tracks || !Array.isArray(tracks)) {

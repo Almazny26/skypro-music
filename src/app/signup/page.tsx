@@ -1,7 +1,6 @@
 'use client';
 
-import styles from './signup.module.css';
-import classNames from 'classnames';
+import styles from './page.module.css';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useState } from 'react';
@@ -96,7 +95,7 @@ export default function SignUp() {
             <Link href="/">
               <div className={styles.modalLogo}>
                 <Image
-                  src="/img/logo_modal.png"
+                  src="/img/logo.png"
                   alt="logo"
                   width={140}
                   height={21}
@@ -105,7 +104,7 @@ export default function SignUp() {
             </Link>
 
             <input
-              className={classNames(styles.modalInput, styles.login)}
+              className={styles.modalInput}
               type="email"
               name="login"
               placeholder="Почта"
