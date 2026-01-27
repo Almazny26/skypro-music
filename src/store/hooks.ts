@@ -1,9 +1,5 @@
 import { useDispatch, useSelector } from 'react-redux';
 import type { RootState, AppDispatch } from './store';
 
-// Типизированные хуки для работы с Redux
-// Использую withTypes чтобы TypeScript знал типы автоматически
 export const useAppDispatch = useDispatch.withTypes<AppDispatch>();
 export const useAppSelector = useSelector.withTypes<RootState>();
-
-
