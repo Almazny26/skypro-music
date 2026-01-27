@@ -99,18 +99,37 @@
   margin-right: 17px;
   fill: transparent;
   stroke: #696969;
-  transition: fill 0.2s ease, stroke 0.2s ease;
+  transition: fill 0.3s ease, stroke 0.3s ease, transform 0.2s ease;
   flex-shrink: 0;
+  cursor: pointer;
 }
 
 .timeSvg:hover {
   fill: transparent;
   stroke: #acacac;
+  transform: scale(1.1);
 }
 
 .timeSvgLiked {
   fill: #b672ff;
   stroke: #b672ff;
+  animation: likePulse 0.4s ease;
+}
+
+@keyframes likePulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.3);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.timeSvg:active {
+  transform: scale(0.9);
 }
 
 .timeText {

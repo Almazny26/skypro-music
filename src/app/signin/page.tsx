@@ -50,7 +50,11 @@ export default function Signin() {
         : { username: loginValue, password };
 
       const response = await login(credentials);
-      setToken(response.access);
+      
+      // Проверяем, что токен действительно получен
+      if (response.access && response.access !== 'undefined' && response.access.trim() !== '') {
+        setToken(response.access);
+      }
 
       let usernameToSave: string;
       if (response.username) {

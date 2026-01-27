@@ -21,10 +21,12 @@ interface PlaylistProps {
     album: string;
     duration_in_seconds: number;
     track_file: string;
+    stared_user?: number[];
   }>;
   likedTracks: number[];
   onTrackSelect: (track: PlaylistProps['tracks'][0]) => void;
   onToggleLike: (trackId: number) => void;
+  removingTrackId?: number | null;
 }
 
 export default function Playlist({
@@ -32,6 +34,7 @@ export default function Playlist({
   likedTracks,
   onTrackSelect,
   onToggleLike,
+  removingTrackId,
 }: PlaylistProps) {
   const currentTrack = useAppSelector((state) => state.track.currentTrack);
   const isPlaying = useAppSelector((state) => state.track.isPlaying);
