@@ -135,7 +135,6 @@ export function removeToken(): void {
   localStorage.removeItem('username');
   localStorage.removeItem('userEmail');
   localStorage.removeItem('userId');
-  localStorage.removeItem('likedTracks');
   refreshTokenPromise = null; // Сбрасываем Promise обновления токена
   window.dispatchEvent(new Event('localStorageChange'));
 }
@@ -159,30 +158,41 @@ export function setRefreshToken(token: string): void {
   localStorage.setItem('refreshToken', token);
 }
 
-// Обновление токена через refresh token
+// Обновление токена через refresh token (вызов без Authorization, чтобы не слать протухший access)
 export async function refreshAccessToken(): Promise<string | null> {
   const refreshToken = getRefreshToken();
   if (!refreshToken) {
     return null;
   }
 
+  const requestUrl = API_BASE_URL.startsWith('/api/proxy')
+    ? `${API_BASE_URL}/user/token/refresh/`
+    : `https://webdev-music-003b5b991590.herokuapp.com/user/token/refresh/`;
+
   try {
-    const response = await fetchAPI<AuthResponse>('/user/token/refresh/', {
+    const response = await fetch(requestUrl, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refresh: refreshToken }),
+      credentials: API_BASE_URL.startsWith('/api/proxy') ? 'include' : 'same-origin',
     });
 
-    const newAccessToken = response.access || response.token || response.accessToken;
+    if (!response.ok) {
+      removeToken();
+      return null;
+    }
+
+    const data = await response.json();
+    const newAccessToken = data.access || data.token || data.accessToken;
     if (newAccessToken) {
       setToken(newAccessToken);
-      if (response.refresh) {
-        setRefreshToken(response.refresh);
+      if (data.refresh) {
+        setRefreshToken(data.refresh);
       }
       return newAccessToken;
     }
     return null;
   } catch (error) {
-    // Если обновление не удалось, очищаем токены
     removeToken();
     return null;
   }
@@ -258,26 +268,9 @@ async function fetchAPI<T>(
     headers['Content-Type'] = 'application/json';
   }
 
-  // Если есть токен, используем Bearer токен
+  // Для авторизованных запросов передаём только Bearer токен (по документации API)
   if (token && token.trim() !== '') {
     headers['Authorization'] = `Bearer ${token}`;
-  } else {
-    // Если токена нет, но есть username, возможно используется session authentication
-    // Пробуем разные способы авторизации через заголовки
-    const username = typeof window !== 'undefined' ? localStorage.getItem('username') : null;
-    const userId = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
-    
-    if (username && username !== 'undefined' && username !== 'null') {
-      if (userId && userId !== 'undefined' && userId !== 'null') {
-        // Пробуем разные варианты заголовков для авторизации
-        // Вариант 1: X-User-Id
-        headers['X-User-Id'] = userId;
-        // Вариант 2: X-User-Name
-        headers['X-User-Name'] = username;
-        // Вариант 3: Authorization с userId
-        // headers['Authorization'] = `User ${userId}`;
-      }
-    }
   }
 
   let response: Response;
@@ -451,69 +444,64 @@ async function fetchAPI<T>(
     data = await response.text();
   }
   
-  // Проверяем заголовки на наличие токена (для login/signup)
-  const url = `${API_BASE_URL}${endpoint}`;
-  if (url.includes('/user/login/') || url.includes('/user/signup/')) {
-    const authHeader = response.headers.get('Authorization');
-    const tokenHeader = response.headers.get('X-Access-Token') || response.headers.get('X-Token');
-    
-    // Если токен в заголовке, добавляем его в данные
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      data.access = authHeader.substring(7);
-    } else if (tokenHeader) {
-      data.access = tokenHeader;
-    }
-  }
-  
   return data as T;
+}
+
+// Получить пару access и refresh токенов (эндпоинт /user/token/ по документации API)
+async function getTokens(email: string, password: string): Promise<{ access: string; refresh: string } | null> {
+  try {
+    const response = await fetchAPI<AuthResponse>('/user/token/', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+    const access = response.access || response.token || response.accessToken;
+    const refresh = response.refresh || response.refreshToken || response.refresh_token || '';
+    if (access && refresh) {
+      return { access, refresh };
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 export async function login(credentials: LoginRequest): Promise<AuthResponse> {
   const email = credentials.email || credentials.username || '';
 
-  const requestData = {
-    email: email,
-    password: credentials.password,
-  };
-
-  const response = await fetchAPI<any>('/user/login/', {
+  // 1. Вход — проверка учётных данных и получение данных пользователя (токенов /user/login/ не возвращает)
+  const loginResponse = await fetchAPI<any>('/user/login/', {
     method: 'POST',
-    body: JSON.stringify(requestData),
+    body: JSON.stringify({ email, password: credentials.password }),
   });
 
-  // Проверяем различные возможные поля для токена
-  let token = response.access || response.token || response.accessToken || response.access_token;
-  const refresh = response.refresh || response.refreshToken || response.refresh_token || '';
-  
-  // Сохраняем ID пользователя для возможного использования
-  // Проверяем различные возможные поля для ID пользователя
-  const userId = response._id || response.id || response.userId || response.user_id || response.user?.id || response.user?._id;
+  const username = loginResponse.username || '';
+  const userId = loginResponse._id || loginResponse.id;
+
   if (userId && typeof window !== 'undefined') {
     localStorage.setItem('userId', String(userId));
   }
 
-  // Сохраняем refresh токен, если есть
-  if (refresh && typeof window !== 'undefined') {
-    setRefreshToken(refresh);
-  }
-
-  if (!token) {
-    // Если токен не найден, возможно используется session authentication
-    // Возвращаем пустой токен - сессия будет работать через cookies
+  // 2. Получение JWT токенов через эндпоинт /user/token/
+  const tokens = await getTokens(email, credentials.password);
+  if (!tokens) {
     return {
       access: '',
-      refresh: refresh,
-      username: response.username || '',
-      email: response.email || '',
+      refresh: '',
+      username,
+      email: loginResponse.email || email,
     };
   }
 
-  // Возвращаем нормализованный ответ
+  if (typeof window !== 'undefined') {
+    setToken(tokens.access);
+    setRefreshToken(tokens.refresh);
+  }
+
   return {
-    access: token,
-    refresh: refresh,
-    username: response.username || '',
-    email: response.email || '',
+    access: tokens.access,
+    refresh: tokens.refresh,
+    username,
+    email: loginResponse.email || email,
   };
 }
 
@@ -525,50 +513,40 @@ export async function register(data: RegisterRequest): Promise<AuthResponse> {
     username = data.email;
   }
 
-  const requestData = {
-    username: username,
-    email: data.email,
-    password: data.password,
-  };
-
-  const response = await fetchAPI<any>('/user/signup/', {
+  // 1. Регистрация (токенов /user/signup/ не возвращает)
+  const signupResponse = await fetchAPI<any>('/user/signup/', {
     method: 'POST',
-    body: JSON.stringify(requestData),
+    body: JSON.stringify({ username, email: data.email, password: data.password }),
   });
 
-  // Проверяем различные возможные поля для токена
-  const token = response.access || response.token || response.accessToken || response.access_token;
-  const refresh = response.refresh || response.refreshToken || response.refresh_token || '';
-  
-  // Сохраняем ID пользователя для возможного использования
-  // Проверяем различные возможные поля для ID пользователя
-  const userId = response._id || response.id || response.userId || response.user_id || response.user?.id || response.user?._id;
+  const result = signupResponse.result || signupResponse;
+  const userId = result._id || result.id || signupResponse._id || signupResponse.id;
+
   if (userId && typeof window !== 'undefined') {
     localStorage.setItem('userId', String(userId));
   }
 
-  // Сохраняем refresh токен, если есть
-  if (refresh && typeof window !== 'undefined') {
-    setRefreshToken(refresh);
-  }
-
-  if (!token) {
-    // Если токен не найден, возможно используется session authentication
-    // Возвращаем пустой токен - сессия будет работать через cookies
+  // 2. Получение JWT токенов через эндпоинт /user/token/
+  const tokens = await getTokens(data.email, data.password);
+  if (!tokens) {
     return {
       access: '',
-      refresh: refresh,
-      username: response.username || '',
-      email: response.email || '',
+      refresh: '',
+      username: result.username || username,
+      email: result.email || data.email,
     };
   }
 
-  // Возвращаем нормализованный ответ
+  if (typeof window !== 'undefined') {
+    setToken(tokens.access);
+    setRefreshToken(tokens.refresh);
+  }
+
   return {
-    access: token,
-    refresh: refresh,
-    username: response.username || '',
-    email: response.email || '',
+    access: tokens.access,
+    refresh: tokens.refresh,
+    username: result.username || username,
+    email: result.email || data.email,
   };
 }
 
@@ -669,141 +647,88 @@ export async function getCompilations(): Promise<CompilationResponse[]> {
   return fetchAPI<CompilationResponse[]>('/catalog/selection/');
 }
 
-// Добавить трек в избранное (с автоматическим обновлением токена)
+// Добавить трек в избранное (Authorization: Bearer access, по документации API)
 export const addTrackToFavorites = withReAuth(async function addTrackToFavorites(trackId: number): Promise<void> {
-  // Для session authentication токен может быть пустым
-  // Проверяем наличие username как индикатор авторизации
   const token = getToken();
-  const username = typeof window !== 'undefined' ? localStorage.getItem('username') : null;
-  const userId = getCurrentUserId();
-  
-  if ((!token || token.trim() === '') && (!username || username === 'undefined' || username === 'null')) {
+  if (!token || token.trim() === '') {
     throw new Error('Необходимо войти в систему.');
   }
 
-  // Пробуем отправить userId и username в теле запроса, если токена нет
-  const body: any = {};
-  if (!token) {
-    if (userId) {
-      body.user_id = userId;
-      body.userId = userId;
-      body.id = userId;
-      body._id = userId;
-    }
-    if (username) {
-      body.username = username;
-      body.user = username;
-    }
-  }
-  
   try {
     await fetchAPI<void>(`/catalog/track/${trackId}/favorite/`, {
       method: 'POST',
-      body: Object.keys(body).length > 0 ? JSON.stringify(body) : JSON.stringify({}),
+      body: JSON.stringify({}),
     });
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'Не удалось добавить трек в избранное';
-    
-    // Улучшенная обработка ошибок
     if (errorMessage.includes('401') || errorMessage.includes('токен') || errorMessage.includes('Токен')) {
       throw new Error('Токен недействителен или истек. Пожалуйста, войдите заново.');
-    } else if (errorMessage.includes('403') || errorMessage.includes('запрещен')) {
-      throw new Error('Доступ запрещен. Убедитесь, что вы авторизованы.');
-    } else if (errorMessage.includes('404')) {
-      throw new Error('Трек не найден.');
-    } else if (errorMessage.includes('500') || errorMessage.includes('сервер')) {
-      throw new Error('Ошибка сервера. Попробуйте позже.');
-    } else {
-      throw new Error(errorMessage);
     }
+    if (errorMessage.includes('403') || errorMessage.includes('запрещен')) {
+      throw new Error('Доступ запрещен. Убедитесь, что вы авторизованы.');
+    }
+    if (errorMessage.includes('404')) {
+      throw new Error('Трек не найден.');
+    }
+    if (errorMessage.includes('500') || errorMessage.includes('сервер')) {
+      throw new Error('Ошибка сервера. Попробуйте позже.');
+    }
+    throw new Error(errorMessage);
   }
 });
 
-// Удалить трек из избранного (с автоматическим обновлением токена)
+// Удалить трек из избранного (Authorization: Bearer access, по документации API)
 export const removeTrackFromFavorites = withReAuth(async function removeTrackFromFavorites(trackId: number): Promise<void> {
-  // Для session authentication токен может быть пустым
-  // Проверяем наличие username как индикатор авторизации
   const token = getToken();
-  const username = typeof window !== 'undefined' ? localStorage.getItem('username') : null;
-  const userId = getCurrentUserId();
-  
-  if ((!token || token.trim() === '') && (!username || username === 'undefined' || username === 'null')) {
+  if (!token || token.trim() === '') {
     throw new Error('Необходимо войти в систему.');
   }
 
-  // Пробуем отправить userId и username в теле запроса, если токена нет
-  const body: any = {};
-  if (!token) {
-    if (userId) {
-      body.user_id = userId;
-      body.userId = userId;
-      body.id = userId;
-      body._id = userId;
-    }
-    if (username) {
-      body.username = username;
-      body.user = username;
-    }
-  }
-  
   try {
     await fetchAPI<void>(`/catalog/track/${trackId}/favorite/`, {
       method: 'DELETE',
-      body: Object.keys(body).length > 0 ? JSON.stringify(body) : JSON.stringify({}),
     });
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'Не удалось удалить трек из избранного';
-    
-    // Улучшенная обработка ошибок
     if (errorMessage.includes('401') || errorMessage.includes('токен') || errorMessage.includes('Токен')) {
       throw new Error('Токен недействителен или истек. Пожалуйста, войдите заново.');
-    } else if (errorMessage.includes('403') || errorMessage.includes('запрещен')) {
-      throw new Error('Доступ запрещен. Убедитесь, что вы авторизованы.');
-    } else if (errorMessage.includes('404')) {
-      throw new Error('Трек не найден.');
-    } else if (errorMessage.includes('500') || errorMessage.includes('сервер')) {
-      throw new Error('Ошибка сервера. Попробуйте позже.');
-    } else {
-      throw new Error(errorMessage);
     }
+    if (errorMessage.includes('403') || errorMessage.includes('запрещен')) {
+      throw new Error('Доступ запрещен. Убедитесь, что вы авторизованы.');
+    }
+    if (errorMessage.includes('404')) {
+      throw new Error('Трек не найден.');
+    }
+    if (errorMessage.includes('500') || errorMessage.includes('сервер')) {
+      throw new Error('Ошибка сервера. Попробуйте позже.');
+    }
+    throw new Error(errorMessage);
   }
 });
 
-// Получить избранные треки пользователя (локальное хранение)
-export async function getFavoriteTracks(): Promise<Track[]> {
-  // Получаем все треки
+// Получить избранные треки пользователя (GET /catalog/track/favorite/all/ по документации API)
+export const getFavoriteTracks = withReAuth(async function getFavoriteTracks(): Promise<Track[]> {
+  const token = getToken();
+  if (!token || token.trim() === '') {
+    return [];
+  }
   try {
-    const allTracks = await getTracks();
-    
-    // Получаем список лайкнутых треков из localStorage
-    if (typeof window === 'undefined') {
-      return [];
+    const response = await fetchAPI<TracksResponse | Track[]>('/catalog/track/favorite/all/');
+    if (Array.isArray(response)) {
+      return response;
     }
-    
-    try {
-      const savedLikes = localStorage.getItem('likedTracks');
-      if (!savedLikes) {
-        return [];
-      }
-      
-      const likedTrackIds = JSON.parse(savedLikes);
-      if (!Array.isArray(likedTrackIds) || likedTrackIds.length === 0) {
-        return [];
-      }
-      
-      // Фильтруем треки по ID из localStorage
-      const favoriteTracks = allTracks.filter((track) => 
-        likedTrackIds.includes(track._id)
-      );
-      
-      return favoriteTracks;
-    } catch (err) {
-      return [];
+    const data = response as TracksResponse;
+    if (data.data && Array.isArray(data.data)) {
+      return data.data;
     }
+    if (data.items && Array.isArray(data.items)) {
+      return data.items;
+    }
+    return [];
   } catch (err) {
     return [];
   }
-}
+});
 
 // Получить ID текущего пользователя (если доступно)
 export function getCurrentUserId(): number | null {

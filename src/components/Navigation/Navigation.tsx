@@ -21,9 +21,10 @@ export default function Navigation() {
       
       // Пользователь авторизован, если есть токен ИЛИ username
       // Это нужно для поддержки session authentication
-      const authenticated = (token && token.trim() !== '') || 
-                           (username && username !== 'undefined' && username !== 'null' && username.trim() !== '');
-      
+      const authenticated = Boolean(
+        (token && token.trim() !== '') ||
+        (username && username !== 'undefined' && username !== 'null' && username.trim() !== '')
+      );
       setIsAuthenticated(authenticated);
     };
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import MainLayout from '../MainLayout';
 import type { Track } from '@/api/api';
@@ -13,6 +13,7 @@ export default function FavoritesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [removingTrackId, setRemovingTrackId] = useState<number | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
+  const skipNextRefetchRef = useRef(false);
 
   // Проверка авторизации
   useEffect(() => {
@@ -47,6 +48,10 @@ export default function FavoritesPage() {
     loadFavoriteTracks();
 
     const handleFavoriteUpdate = () => {
+      if (skipNextRefetchRef.current) {
+        skipNextRefetchRef.current = false;
+        return;
+      }
       loadFavoriteTracks();
     };
 
@@ -55,7 +60,7 @@ export default function FavoritesPage() {
     return () => {
       window.removeEventListener('favoritesUpdated', handleFavoriteUpdate);
     };
-  }, [loadFavoriteTracks]); // loadFavoriteTracks мемоизирован, так что это безопасно
+  }, [loadFavoriteTracks]);
 
   const handleRemoveFromFavorites = useCallback((trackId: number) => {
     if (removingTrackId === trackId) return;
@@ -63,26 +68,9 @@ export default function FavoritesPage() {
     setRemovingTrackId(trackId);
     setRemoveError(null);
 
-    // Обновляем локальное состояние
+    skipNextRefetchRef.current = true;
+
     setFavoriteTracks((prev) => prev.filter((track) => track._id !== trackId));
-
-    // Обновляем localStorage
-    if (typeof window !== 'undefined') {
-      try {
-        const savedLikes = localStorage.getItem('likedTracks');
-        if (savedLikes) {
-          const likedTrackIds = JSON.parse(savedLikes);
-          if (Array.isArray(likedTrackIds)) {
-            const newLikedTracks = likedTrackIds.filter((id: number) => id !== trackId);
-            localStorage.setItem('likedTracks', JSON.stringify(newLikedTracks));
-          }
-        }
-      } catch (err) {
-        setRemoveError('Не удалось удалить трек из избранного.');
-        setTimeout(() => setRemoveError(null), 5000);
-      }
-    }
-
     setRemovingTrackId(null);
   }, [removingTrackId]);
 

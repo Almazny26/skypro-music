@@ -12,9 +12,11 @@ import type { Track } from '@/api/api';
 import {
   getTracks,
   getCompilation,
+  getFavoriteTracks,
+  addTrackToFavorites,
+  removeTrackFromFavorites,
   getToken,
   removeToken,
-  getCurrentUserId,
 } from '@/api/api';
 import Navigation from '@/components/Navigation';
 import Search from '@/components/Search';
@@ -33,6 +35,7 @@ interface MainLayoutProps {
   removingTrackId?: number | null;
   removeError?: string | null;
   pageTitle?: string;
+  children?: React.ReactNode;
 }
 
 // Главный компонент приложения
@@ -44,6 +47,7 @@ export default function MainLayout({
   removingTrackId,
   removeError,
   pageTitle,
+  children,
 }: MainLayoutProps = {}) {
   // Redux хуки для работы со store
   const dispatch = useAppDispatch();
@@ -76,21 +80,28 @@ export default function MainLayout({
     }
   }, [initialTracks, initialError]);
 
-  // Загрузка лайков из localStorage (локальное хранение)
+  // Загрузка лайков с сервера (только при наличии токена)
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    
-    try {
-      const savedLikes = localStorage.getItem('likedTracks');
-      if (savedLikes) {
-        const likedTrackIds = JSON.parse(savedLikes);
-        if (Array.isArray(likedTrackIds)) {
-          setLikedTracks(likedTrackIds);
-        }
+
+    const loadLikedTracks = async () => {
+      const token = getToken();
+      if (!token || token.trim() === '') {
+        setLikedTracks([]);
+        return;
       }
-    } catch (err) {
-      setLikedTracks([]);
-    }
+      try {
+        const favoriteTracks = await getFavoriteTracks();
+        setLikedTracks(favoriteTracks.map((t) => t._id));
+      } catch {
+        setLikedTracks([]);
+      }
+    };
+
+    loadLikedTracks();
+    const handleStorageChange = () => loadLikedTracks();
+    window.addEventListener('localStorageChange', handleStorageChange);
+    return () => window.removeEventListener('localStorageChange', handleStorageChange);
   }, []);
 
   // Очистка невалидного токена при загрузке
@@ -118,6 +129,9 @@ export default function MainLayout({
     const loadTracks = async () => {
       setIsLoading(true);
       setError(null);
+      if (currentCompilationId !== undefined && currentCompilationId !== null && !isNaN(currentCompilationId)) {
+        setTracks([]);
+      }
 
       // Маппинг названий подборок
       const compilationNames: Record<number, string> = {
@@ -219,14 +233,24 @@ export default function MainLayout({
         }
 
         // Сохраняем загруженные треки
-        setTracks(loadedTracks || []);
+        const tracksToSet = loadedTracks || [];
+        setTracks(tracksToSet);
         if (
           currentRequestId === requestCounterRef.current &&
           currentCompilationId === compilationIdRef.current
         ) {
           setCompilationName(compilationNameToSet);
         }
-        setError(null);
+        if (
+          currentCompilationId !== undefined &&
+          currentCompilationId !== null &&
+          !isNaN(currentCompilationId) &&
+          tracksToSet.length === 0
+        ) {
+          setError('В этой подборке пока нет треков');
+        } else {
+          setError(null);
+        }
       } catch (err) {
         if (cancelled) {
           return;
@@ -390,34 +414,22 @@ export default function MainLayout({
     });
   }, [currentTrack]);
 
-  // Переключение лайка трека (локальное хранение)
-  const handleToggleLike = useCallback((trackId: number) => {
-    // Предотвращаем множественные клики
+  // Переключение лайка трека (с сервером по документации API, fallback на localStorage при ошибке)
+  const handleToggleLike = useCallback(async (trackId: number) => {
     if (likingTrackId === trackId) return;
 
     setLikingTrackId(trackId);
     setLikeError(null);
 
-    // Определяем, лайкнут ли трек локально
     const isCurrentlyLiked = likedTracks.includes(trackId);
+    const previousLikedTracks = [...likedTracks];
+    const previousTracks = [...tracks];
 
-    // Обновляем локальное состояние лайков
     const newLikedTracks = isCurrentlyLiked
       ? likedTracks.filter((id) => id !== trackId)
       : [...likedTracks, trackId];
-    
     setLikedTracks(newLikedTracks);
 
-    // Сохраняем в localStorage
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('likedTracks', JSON.stringify(newLikedTracks));
-      } catch (err) {
-        // Ошибка при сохранении в localStorage
-      }
-    }
-
-    // Обновляем количество лайков в треке оптимистично
     setTracks((prevTracks) =>
       prevTracks.map((track) => {
         if (track._id === trackId) {
@@ -425,7 +437,6 @@ export default function MainLayout({
           const newLikesCount = isCurrentlyLiked
             ? Math.max(0, currentLikes.length - 1)
             : currentLikes.length + 1;
-          
           return {
             ...track,
             stared_user: Array.from({ length: newLikesCount }, (_, i) => i + 1),
@@ -435,18 +446,46 @@ export default function MainLayout({
       }),
     );
 
-    // Отправляем событие обновления избранного для страницы favorites
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new Event('favoritesUpdated'));
-      
-      // Если есть обработчик удаления из избранного (для страницы favorites)
-      if (onRemoveFromFavorites && isCurrentlyLiked) {
-        onRemoveFromFavorites(trackId);
+    const token = getToken();
+    if (token && token.trim() !== '') {
+      try {
+        if (isCurrentlyLiked) {
+          await removeTrackFromFavorites(trackId);
+        } else {
+          await addTrackToFavorites(trackId);
+        }
+        try {
+          const favoriteTracks = await getFavoriteTracks();
+          setLikedTracks(favoriteTracks.map((t) => t._id));
+          const updatedTracks = await getTracks();
+          setTracks(updatedTracks);
+        } catch (refreshErr) {}
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('favoritesUpdated'));
+          if (onRemoveFromFavorites && isCurrentlyLiked) {
+            onRemoveFromFavorites(trackId);
+          }
+        }
+        setLikingTrackId(null);
+      } catch (err) {
+        setLikedTracks(previousLikedTracks);
+        setTracks(previousTracks);
+        const msg = err instanceof Error ? err.message : 'Не удалось обновить избранное.';
+        setLikeError(msg.includes('токен') || msg.includes('401') ? 'Токен недействителен или истек. Войдите заново.' : msg);
+        setTimeout(() => setLikeError(null), 5000);
+      } finally {
+        setLikingTrackId(null);
       }
+    } else {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('favoritesUpdated'));
+        if (onRemoveFromFavorites && isCurrentlyLiked) {
+          onRemoveFromFavorites(trackId);
+        }
+      }
+      setLikingTrackId(null);
     }
-
-    setLikingTrackId(null);
-  }, [likingTrackId, likedTracks, onRemoveFromFavorites]);
+  }, [likingTrackId, likedTracks, onRemoveFromFavorites, tracks]);
 
   // Обработчик изменения поискового запроса (мемоизирован)
   const handleSearchChange = useCallback((query: string) => {
@@ -463,6 +502,33 @@ export default function MainLayout({
     currentTrack ? () => handleToggleLike(currentTrack._id) : () => {},
     [currentTrack?._id, handleToggleLike]
   );
+
+  // Если передан children (например, страница избранного в состоянии загрузки/ошибки), рендерим оболочку с ним
+  if (children !== undefined) {
+    return (
+      <div className={styles.wrapper}>
+        <div className={styles.container}>
+          <main className={styles.main}>
+            <Navigation />
+            <div className={styles.centerblock}>
+              {children}
+            </div>
+            <Sidebar />
+          </main>
+          <PlayerBar
+            isLiked={isCurrentTrackLiked}
+            isShuffled={isShuffled}
+            onPlayPause={handlePlayPause}
+            onNextTrack={handleNextTrack}
+            onPrevTrack={handlePrevTrack}
+            onToggleShuffle={handleToggleShuffle}
+            onToggleLike={handleCurrentTrackToggleLike}
+          />
+          <footer className={styles.footer}></footer>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.wrapper}>
