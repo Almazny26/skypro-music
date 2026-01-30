@@ -24,6 +24,11 @@ import Filter from '@/components/Filter';
 import Playlist from '@/components/Playlist';
 import Sidebar from '@/components/Sidebar';
 import PlayerBar from '@/components/PlayerBar';
+import {
+  applyAllFilters,
+  hasActiveFilters,
+  type FilterState,
+} from '@/utils/filterUtils';
 import styles from './page.module.css';
 
 // Типы для пропсов компонента
@@ -60,6 +65,9 @@ export default function MainLayout({
   const [playedTracks, setPlayedTracks] = useState<number[]>([]);
   const [likedTracks, setLikedTracks] = useState<number[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterAuthor, setFilterAuthor] = useState<string | null>(null);
+  const [filterGenre, setFilterGenre] = useState<string | null>(null);
+  const [filterYear, setFilterYear] = useState<number | null>(null);
   const [tracks, setTracks] = useState<Track[]>(initialTracks || []);
   const [error, setError] = useState<string | null>(initialError || null);
   const [compilationName, setCompilationName] = useState<string | null>(null);
@@ -69,6 +77,14 @@ export default function MainLayout({
   // useRef для хранения значений между рендерами
   const compilationIdRef = useRef<number | undefined>(compilationId);
   const requestCounterRef = useRef<number>(0);
+
+  // Сброс поиска и фильтров при переходе на другую страницу
+  useEffect(() => {
+    setSearchQuery('');
+    setFilterAuthor(null);
+    setFilterGenre(null);
+    setFilterYear(null);
+  }, [compilationId]);
 
   // Если треки переданы извне, используем их
   useEffect(() => {
@@ -80,7 +96,7 @@ export default function MainLayout({
     }
   }, [initialTracks, initialError]);
 
-  // Загрузка лайков с сервера (только при наличии токена)
+  // Загрузка лайков с сервера (только при наличии токена; при 401 токен сбрасывается в getFavoriteTracks)
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -300,24 +316,34 @@ export default function MainLayout({
     }
   }, [compilationId]);
 
-  // Фильтрация треков по поисковому запросу
-  useEffect(() => {
-    if (!Array.isArray(tracks)) {
-      dispatch(setPlaylist([]));
-      return;
-    }
+  // Комбинированная фильтрация: поиск (по первым буквам названия), автор, жанр, год; сортировка по дате
+  const filterState: FilterState = useMemo(
+    () => ({
+      searchQuery,
+      author: filterAuthor,
+      genre: filterGenre,
+      year: filterYear,
+    }),
+    [searchQuery, filterAuthor, filterGenre, filterYear]
+  );
 
-    // Фильтруем по названию, автору или альбому
-    const filtered = searchQuery
-      ? tracks.filter(
-          (track) =>
-            track.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            track.author.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            track.album.toLowerCase().includes(searchQuery.toLowerCase()),
-        )
-      : tracks;
-    dispatch(setPlaylist(filtered));
-  }, [searchQuery, tracks, dispatch]);
+  const displayedTracks = useMemo(
+    () => applyAllFilters(tracks, filterState, 'desc'),
+    [tracks, filterState]
+  );
+
+  useEffect(() => {
+    dispatch(setPlaylist(displayedTracks));
+  }, [displayedTracks, dispatch]);
+
+  const handleFilterSelect = useCallback(
+    (type: 'author' | 'genre' | 'year', value: string | number | null) => {
+      if (type === 'author') setFilterAuthor(value as string | null);
+      else if (type === 'genre') setFilterGenre(value as string | null);
+      else if (type === 'year') setFilterYear(value as number | null);
+    },
+    []
+  );
 
   // Обработчик выбора трека (мемоизирован)
   const handleTrackSelect = useCallback((track: Track) => {
@@ -471,7 +497,11 @@ export default function MainLayout({
         setLikedTracks(previousLikedTracks);
         setTracks(previousTracks);
         const msg = err instanceof Error ? err.message : 'Не удалось обновить избранное.';
-        setLikeError(msg.includes('токен') || msg.includes('401') ? 'Токен недействителен или истек. Войдите заново.' : msg);
+        const isAuthError = msg.includes('токен') || msg.includes('401') || msg.includes('Токен') || msg.includes('недействителен');
+        if (isAuthError) {
+          removeToken();
+        }
+        setLikeError(isAuthError ? 'Токен недействителен или истек. Войдите заново.' : msg);
         setTimeout(() => setLikeError(null), 5000);
       } finally {
         setLikingTrackId(null);
@@ -539,7 +569,13 @@ export default function MainLayout({
           <div className={styles.centerblock}>
             <Search onSearchChange={handleSearchChange} />
             <h2 className={styles.h2}>{pageTitle || compilationName || 'Треки'}</h2>
-            <Filter tracks={tracks} />
+            <Filter
+              tracks={tracks}
+              selectedAuthor={filterAuthor}
+              selectedGenre={filterGenre}
+              selectedYear={filterYear}
+              onFilterSelect={handleFilterSelect}
+            />
             {isLoading && (
               <div
                 style={{ color: '#fff', padding: '20px', textAlign: 'center' }}
@@ -585,13 +621,19 @@ export default function MainLayout({
               </div>
             )}
             {!isLoading && !error && (
-              <Playlist
-                tracks={playlist.length > 0 ? playlist : tracks}
-                likedTracks={likedTracks}
-                onTrackSelect={handleTrackSelect}
-                onToggleLike={handleToggleLike}
-                removingTrackId={removingTrackId}
-              />
+              <>
+                {displayedTracks.length === 0 && hasActiveFilters(filterState) ? (
+                  <p className={styles.emptyMessage}>Нет подходящих треков</p>
+                ) : (
+                  <Playlist
+                    tracks={displayedTracks}
+                    likedTracks={likedTracks}
+                    onTrackSelect={handleTrackSelect}
+                    onToggleLike={handleToggleLike}
+                    removingTrackId={removingTrackId}
+                  />
+                )}
+              </>
             )}
           </div>
 
