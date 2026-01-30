@@ -73,7 +73,11 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
           : { username: loginValue, password };
 
         const response = await login(credentials);
-        setToken(response.access);
+        
+        // Проверяем, что токен действительно получен
+        if (response.access && response.access !== 'undefined' && response.access.trim() !== '') {
+          setToken(response.access);
+        }
 
         let usernameToSave: string;
         if (response.username) {
@@ -96,7 +100,11 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
         }, 50);
       } else {
         const response = await register({ email: loginValue, password });
-        setToken(response.access);
+        
+        // Проверяем, что токен действительно получен
+        if (response.access && response.access !== 'undefined' && response.access.trim() !== '') {
+          setToken(response.access);
+        }
 
         let usernameToSave: string;
         if (response.username) {

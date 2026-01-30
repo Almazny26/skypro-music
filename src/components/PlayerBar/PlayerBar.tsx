@@ -82,7 +82,6 @@ export default function PlayerBar({
       const startPlayback = () => {
         if (audio.paused && audio.src) {
           audio.play().catch((err) => {
-            console.error('Play failed:', err);
             dispatch(setIsPlaying(false));
           });
         }
@@ -139,7 +138,6 @@ export default function PlayerBar({
 
     const handleError = () => {
       if (audio.error) {
-        console.error('Audio error:', audio.error.code, audio.error.message);
         dispatch(setIsPlaying(false));
       }
     };

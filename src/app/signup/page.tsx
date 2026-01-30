@@ -49,7 +49,11 @@ export default function SignUp() {
 
     try {
       const response = await register({ email, password });
-      setToken(response.access);
+      
+      // Проверяем, что токен действительно получен
+      if (response.access && response.access !== 'undefined' && response.access.trim() !== '') {
+        setToken(response.access);
+      }
 
       let usernameToSave: string;
       if (response.username) {

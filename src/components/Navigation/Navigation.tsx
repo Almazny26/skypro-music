@@ -17,14 +17,22 @@ export default function Navigation() {
   useEffect(() => {
     const checkAuth = () => {
       const token = getToken();
-      setIsAuthenticated(!!token);
+      const username = typeof window !== 'undefined' ? localStorage.getItem('username') : null;
+      
+      // Пользователь авторизован, если есть токен ИЛИ username
+      // Это нужно для поддержки session authentication
+      const authenticated = Boolean(
+        (token && token.trim() !== '') ||
+        (username && username !== 'undefined' && username !== 'null' && username.trim() !== '')
+      );
+      setIsAuthenticated(authenticated);
     };
 
     checkAuth();
 
     // Слушаем изменения в localStorage
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'accessToken') {
+      if (e.key === 'accessToken' || e.key === 'username') {
         checkAuth();
       }
     };
@@ -48,10 +56,14 @@ export default function Navigation() {
     setIsMenuOpen(!isMenuOpen);
   };
 
-  // Обработчик клика по пункту меню
+  // Обработчик клика по пункту меню "Мой плейлист"
   const handleMenuClick = (e: React.MouseEvent) => {
     e.preventDefault();
-    alert('Еще не реализовано');
+    if (isAuthenticated) {
+      router.push('/favorites');
+    } else {
+      router.push('/signin');
+    }
   };
 
   // Выход из аккаунта
@@ -59,7 +71,13 @@ export default function Navigation() {
     e.preventDefault();
     removeToken();
     setIsAuthenticated(false);
-    router.push('/signin');
+    // Если пользователь был на странице избранного, редиректим на главную
+    const currentPath = window.location.pathname;
+    if (currentPath === '/favorites') {
+      router.push('/');
+    } else {
+      router.push('/signin');
+    }
   };
 
   return (

@@ -10,6 +10,7 @@ interface TrackProps {
     album: string;
     duration_in_seconds: number;
     track_file: string;
+    stared_user?: number[];
   };
   duration: string;
   subtitle?: string;

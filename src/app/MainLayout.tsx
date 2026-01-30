@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import {
   setCurrentTrack,
@@ -9,7 +9,15 @@ import {
   setPlaylist,
 } from '@/store/trackSlice';
 import type { Track } from '@/api/api';
-import { getTracks, getCompilation } from '@/api/api';
+import {
+  getTracks,
+  getCompilation,
+  getFavoriteTracks,
+  addTrackToFavorites,
+  removeTrackFromFavorites,
+  getToken,
+  removeToken,
+} from '@/api/api';
 import Navigation from '@/components/Navigation';
 import Search from '@/components/Search';
 import Filter from '@/components/Filter';
@@ -23,6 +31,11 @@ interface MainLayoutProps {
   tracks?: Track[];
   error?: string | null;
   compilationId?: number;
+  onRemoveFromFavorites?: (trackId: number) => void;
+  removingTrackId?: number | null;
+  removeError?: string | null;
+  pageTitle?: string;
+  children?: React.ReactNode;
 }
 
 // Главный компонент приложения
@@ -30,6 +43,11 @@ export default function MainLayout({
   tracks: initialTracks,
   error: initialError,
   compilationId,
+  onRemoveFromFavorites,
+  removingTrackId,
+  removeError,
+  pageTitle,
+  children,
 }: MainLayoutProps = {}) {
   // Redux хуки для работы со store
   const dispatch = useAppDispatch();
@@ -46,6 +64,8 @@ export default function MainLayout({
   const [error, setError] = useState<string | null>(initialError || null);
   const [compilationName, setCompilationName] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(initialTracks === undefined);
+  const [likeError, setLikeError] = useState<string | null>(null);
+  const [likingTrackId, setLikingTrackId] = useState<number | null>(null);
   // useRef для хранения значений между рендерами
   const compilationIdRef = useRef<number | undefined>(compilationId);
   const requestCounterRef = useRef<number>(0);
@@ -59,6 +79,38 @@ export default function MainLayout({
       return;
     }
   }, [initialTracks, initialError]);
+
+  // Загрузка лайков с сервера (только при наличии токена)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const loadLikedTracks = async () => {
+      const token = getToken();
+      if (!token || token.trim() === '') {
+        setLikedTracks([]);
+        return;
+      }
+      try {
+        const favoriteTracks = await getFavoriteTracks();
+        setLikedTracks(favoriteTracks.map((t) => t._id));
+      } catch {
+        setLikedTracks([]);
+      }
+    };
+
+    loadLikedTracks();
+    const handleStorageChange = () => loadLikedTracks();
+    window.addEventListener('localStorageChange', handleStorageChange);
+    return () => window.removeEventListener('localStorageChange', handleStorageChange);
+  }, []);
+
+  // Очистка невалидного токена при загрузке
+  useEffect(() => {
+    const token = localStorage.getItem('accessToken');
+    if (token === 'undefined' || token === 'null' || (token && token.trim() === '')) {
+      removeToken();
+    }
+  }, []);
 
   // Загрузка треков с сервера
   useEffect(() => {
@@ -77,6 +129,9 @@ export default function MainLayout({
     const loadTracks = async () => {
       setIsLoading(true);
       setError(null);
+      if (currentCompilationId !== undefined && currentCompilationId !== null && !isNaN(currentCompilationId)) {
+        setTracks([]);
+      }
 
       // Маппинг названий подборок
       const compilationNames: Record<number, string> = {
@@ -178,21 +233,43 @@ export default function MainLayout({
         }
 
         // Сохраняем загруженные треки
-        setTracks(loadedTracks || []);
+        const tracksToSet = loadedTracks || [];
+        setTracks(tracksToSet);
         if (
           currentRequestId === requestCounterRef.current &&
           currentCompilationId === compilationIdRef.current
         ) {
           setCompilationName(compilationNameToSet);
         }
-        setError(null);
+        if (
+          currentCompilationId !== undefined &&
+          currentCompilationId !== null &&
+          !isNaN(currentCompilationId) &&
+          tracksToSet.length === 0
+        ) {
+          setError('В этой подборке пока нет треков');
+        } else {
+          setError(null);
+        }
       } catch (err) {
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
         // Обработка ошибок
-        const errorMessage =
+        let errorMessage =
           err instanceof Error
             ? err.message
             : 'Произошла ошибка при загрузке треков';
+        
+        // Улучшаем сообщения об ошибках сети
+        if (errorMessage.includes('подключиться к серверу') || 
+            errorMessage.includes('недоступен') ||
+            errorMessage.includes('Failed to fetch')) {
+          errorMessage = 'Сервер недоступен. Проверьте подключение к интернету и VPN (если требуется).';
+        } else if (errorMessage.includes('Превышено время ожидания')) {
+          errorMessage = 'Сервер не отвечает. Проверьте подключение к интернету и VPN (если требуется).';
+        }
+        
         setError(errorMessage);
         setTracks([]);
         setCompilationName(null);
@@ -242,8 +319,8 @@ export default function MainLayout({
     dispatch(setPlaylist(filtered));
   }, [searchQuery, tracks, dispatch]);
 
-  // Обработчик выбора трека
-  const handleTrackSelect = (track: Track) => {
+  // Обработчик выбора трека (мемоизирован)
+  const handleTrackSelect = useCallback((track: Track) => {
     if (currentTrack?._id === track._id) {
       // Если выбран текущий трек, пауза/плей
       dispatch(togglePlayPause());
@@ -255,10 +332,10 @@ export default function MainLayout({
         setPlayedTracks([track._id]);
       }
     }
-  };
+  }, [currentTrack?._id, isShuffled, dispatch]);
 
-  // Обработчик плей/паузы
-  const handlePlayPause = () => {
+  // Обработчик плей/паузы (мемоизирован)
+  const handlePlayPause = useCallback(() => {
     if (!currentTrack && playlist.length > 0) {
       // Если нет текущего трека, играем первый
       dispatch(setCurrentTrack(playlist[0]));
@@ -266,11 +343,11 @@ export default function MainLayout({
     } else if (currentTrack) {
       dispatch(togglePlayPause());
     }
-  };
+  }, [currentTrack, playlist, dispatch]);
 
-  // Получить следующий трек
-  const getNextTrack = (): Track | null => {
-    if (!currentTrack) return null;
+  // Переключение на следующий трек (мемоизирован)
+  const handleNextTrack = useCallback(() => {
+    if (!currentTrack) return;
 
     if (isShuffled) {
       // Режим перемешивания
@@ -284,98 +361,174 @@ export default function MainLayout({
         const availableTracks = playlist.filter(
           (track) => track._id !== currentTrack._id,
         );
-        if (availableTracks.length === 0) return null;
+        if (availableTracks.length === 0) return;
         const randomTrack =
           availableTracks[Math.floor(Math.random() * availableTracks.length)];
-        return randomTrack;
+        dispatch(setCurrentTrack(randomTrack));
+        dispatch(setIsPlaying(true));
+        return;
       }
 
       const randomTrack =
         unplayedTracks[Math.floor(Math.random() * unplayedTracks.length)];
-      return randomTrack;
+      setPlayedTracks((prev) => [...prev, currentTrack._id]);
+      dispatch(setCurrentTrack(randomTrack));
+      dispatch(setIsPlaying(true));
     } else {
       // Обычный режим - следующий по порядку
       const currentIndex = playlist.findIndex(
         (track) => track._id === currentTrack._id,
       );
-      if (currentIndex !== -1) {
-        if (currentIndex === playlist.length - 1) {
-          return null;
-        }
+      if (currentIndex !== -1 && currentIndex < playlist.length - 1) {
         const nextIndex = currentIndex + 1;
-        return playlist[nextIndex];
+        dispatch(setCurrentTrack(playlist[nextIndex]));
+        dispatch(setIsPlaying(true));
       }
     }
-    return null;
-  };
+  }, [currentTrack, isShuffled, playlist, playedTracks, dispatch]);
 
-  // Получить предыдущий трек
-  const getPrevTrack = (): Track | null => {
-    if (!currentTrack) return null;
+  // Переключение на предыдущий трек (мемоизирован)
+  const handlePrevTrack = useCallback(() => {
+    if (!currentTrack) return;
 
     const currentIndex = playlist.findIndex(
       (track) => track._id === currentTrack._id,
     );
-    if (currentIndex !== -1) {
-      if (currentIndex === 0) {
-        return null;
-      }
+    if (currentIndex !== -1 && currentIndex > 0) {
       const prevIndex = currentIndex - 1;
-      return playlist[prevIndex];
-    }
-    return null;
-  };
-
-  // Переключение на следующий трек
-  const handleNextTrack = () => {
-    if (!currentTrack) return;
-
-    const nextTrack = getNextTrack();
-    if (nextTrack) {
-      if (isShuffled) {
-        setPlayedTracks((prev) => [...prev, currentTrack._id]);
-      }
-      dispatch(setCurrentTrack(nextTrack));
+      dispatch(setCurrentTrack(playlist[prevIndex]));
       dispatch(setIsPlaying(true));
     }
-  };
+  }, [currentTrack, playlist, dispatch]);
 
-  // Переключение на предыдущий трек
-  const handlePrevTrack = () => {
-    if (!currentTrack) return;
-
-    const prevTrack = getPrevTrack();
-    if (prevTrack) {
-      dispatch(setCurrentTrack(prevTrack));
-      dispatch(setIsPlaying(true));
-    }
-  };
-
-  // Переключение режима перемешивания
-  const handleToggleShuffle = () => {
-    setIsShuffled(!isShuffled);
-    if (currentTrack) {
-      setPlayedTracks([currentTrack._id]);
-    } else {
-      setPlayedTracks([]);
-    }
-  };
-
-  // Переключение лайка трека
-  const handleToggleLike = (trackId: number) => {
-    setLikedTracks((prev) => {
-      if (prev.includes(trackId)) {
-        return prev.filter((id) => id !== trackId);
+  // Переключение режима перемешивания (мемоизирован)
+  const handleToggleShuffle = useCallback(() => {
+    setIsShuffled((prev) => {
+      const newValue = !prev;
+      if (currentTrack) {
+        setPlayedTracks([currentTrack._id]);
       } else {
-        return [...prev, trackId];
+        setPlayedTracks([]);
       }
+      return newValue;
     });
-  };
+  }, [currentTrack]);
 
-  // Обработчик изменения поискового запроса
-  const handleSearchChange = (query: string) => {
+  // Переключение лайка трека (с сервером по документации API, fallback на localStorage при ошибке)
+  const handleToggleLike = useCallback(async (trackId: number) => {
+    if (likingTrackId === trackId) return;
+
+    setLikingTrackId(trackId);
+    setLikeError(null);
+
+    const isCurrentlyLiked = likedTracks.includes(trackId);
+    const previousLikedTracks = [...likedTracks];
+    const previousTracks = [...tracks];
+
+    const newLikedTracks = isCurrentlyLiked
+      ? likedTracks.filter((id) => id !== trackId)
+      : [...likedTracks, trackId];
+    setLikedTracks(newLikedTracks);
+
+    setTracks((prevTracks) =>
+      prevTracks.map((track) => {
+        if (track._id === trackId) {
+          const currentLikes = track.stared_user || [];
+          const newLikesCount = isCurrentlyLiked
+            ? Math.max(0, currentLikes.length - 1)
+            : currentLikes.length + 1;
+          return {
+            ...track,
+            stared_user: Array.from({ length: newLikesCount }, (_, i) => i + 1),
+          };
+        }
+        return track;
+      }),
+    );
+
+    const token = getToken();
+    if (token && token.trim() !== '') {
+      try {
+        if (isCurrentlyLiked) {
+          await removeTrackFromFavorites(trackId);
+        } else {
+          await addTrackToFavorites(trackId);
+        }
+        try {
+          const favoriteTracks = await getFavoriteTracks();
+          setLikedTracks(favoriteTracks.map((t) => t._id));
+          const updatedTracks = await getTracks();
+          setTracks(updatedTracks);
+        } catch (refreshErr) {}
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('favoritesUpdated'));
+          if (onRemoveFromFavorites && isCurrentlyLiked) {
+            onRemoveFromFavorites(trackId);
+          }
+        }
+        setLikingTrackId(null);
+      } catch (err) {
+        setLikedTracks(previousLikedTracks);
+        setTracks(previousTracks);
+        const msg = err instanceof Error ? err.message : 'Не удалось обновить избранное.';
+        setLikeError(msg.includes('токен') || msg.includes('401') ? 'Токен недействителен или истек. Войдите заново.' : msg);
+        setTimeout(() => setLikeError(null), 5000);
+      } finally {
+        setLikingTrackId(null);
+      }
+    } else {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('favoritesUpdated'));
+        if (onRemoveFromFavorites && isCurrentlyLiked) {
+          onRemoveFromFavorites(trackId);
+        }
+      }
+      setLikingTrackId(null);
+    }
+  }, [likingTrackId, likedTracks, onRemoveFromFavorites, tracks]);
+
+  // Обработчик изменения поискового запроса (мемоизирован)
+  const handleSearchChange = useCallback((query: string) => {
     setSearchQuery(query);
-  };
+  }, []);
+
+  // Мемоизированные значения для PlayerBar
+  const isCurrentTrackLiked = useMemo(() => 
+    currentTrack ? likedTracks.includes(currentTrack._id) : false,
+    [currentTrack?._id, likedTracks]
+  );
+
+  const handleCurrentTrackToggleLike = useMemo(() => 
+    currentTrack ? () => handleToggleLike(currentTrack._id) : () => {},
+    [currentTrack?._id, handleToggleLike]
+  );
+
+  // Если передан children (например, страница избранного в состоянии загрузки/ошибки), рендерим оболочку с ним
+  if (children !== undefined) {
+    return (
+      <div className={styles.wrapper}>
+        <div className={styles.container}>
+          <main className={styles.main}>
+            <Navigation />
+            <div className={styles.centerblock}>
+              {children}
+            </div>
+            <Sidebar />
+          </main>
+          <PlayerBar
+            isLiked={isCurrentTrackLiked}
+            isShuffled={isShuffled}
+            onPlayPause={handlePlayPause}
+            onNextTrack={handleNextTrack}
+            onPrevTrack={handlePrevTrack}
+            onToggleShuffle={handleToggleShuffle}
+            onToggleLike={handleCurrentTrackToggleLike}
+          />
+          <footer className={styles.footer}></footer>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.wrapper}>
@@ -385,7 +538,7 @@ export default function MainLayout({
 
           <div className={styles.centerblock}>
             <Search onSearchChange={handleSearchChange} />
-            <h2 className={styles.h2}>{compilationName || 'Треки'}</h2>
+            <h2 className={styles.h2}>{pageTitle || compilationName || 'Треки'}</h2>
             <Filter tracks={tracks} />
             {isLoading && (
               <div
@@ -401,12 +554,43 @@ export default function MainLayout({
                 {error}
               </div>
             )}
+            {likeError && (
+              <div
+                style={{
+                  color: '#ff6b6b',
+                  backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                  padding: '12px 20px',
+                  textAlign: 'center',
+                  borderRadius: '4px',
+                  marginBottom: '10px',
+                  border: '1px solid rgba(255, 107, 107, 0.3)',
+                }}
+              >
+                {likeError}
+              </div>
+            )}
+            {removeError && (
+              <div
+                style={{
+                  color: '#ff6b6b',
+                  backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                  padding: '12px 20px',
+                  textAlign: 'center',
+                  borderRadius: '4px',
+                  marginBottom: '10px',
+                  border: '1px solid rgba(255, 107, 107, 0.3)',
+                }}
+              >
+                {removeError}
+              </div>
+            )}
             {!isLoading && !error && (
               <Playlist
                 tracks={playlist.length > 0 ? playlist : tracks}
                 likedTracks={likedTracks}
                 onTrackSelect={handleTrackSelect}
                 onToggleLike={handleToggleLike}
+                removingTrackId={removingTrackId}
               />
             )}
           </div>
@@ -415,17 +599,13 @@ export default function MainLayout({
         </main>
 
         <PlayerBar
-          isLiked={
-            currentTrack ? likedTracks.includes(currentTrack._id) : false
-          }
+          isLiked={isCurrentTrackLiked}
           isShuffled={isShuffled}
           onPlayPause={handlePlayPause}
           onNextTrack={handleNextTrack}
           onPrevTrack={handlePrevTrack}
           onToggleShuffle={handleToggleShuffle}
-          onToggleLike={
-            currentTrack ? () => handleToggleLike(currentTrack._id) : () => {}
-          }
+          onToggleLike={handleCurrentTrackToggleLike}
         />
         <footer className={styles.footer}></footer>
       </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { removeToken } from '@/api/api';
 import styles from './LogoutModal.module.css';
 
@@ -12,13 +12,19 @@ interface LogoutModalProps {
 
 export default function LogoutModal({ isOpen, onClose, username }: LogoutModalProps) {
   const router = useRouter();
+  const pathname = usePathname();
 
   if (!isOpen) return null;
 
   const handleConfirm = () => {
     removeToken();
     onClose();
-    router.push('/signin');
+    // Если пользователь был на странице избранного, редиректим на главную
+    if (pathname === '/favorites') {
+      router.push('/');
+    } else {
+      router.push('/signin');
+    }
   };
 
   const handleCancel = () => {

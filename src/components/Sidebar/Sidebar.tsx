@@ -56,7 +56,13 @@ export default function Sidebar() {
   const handleLogoutIconClick = () => {
     if (isAuthenticated) {
       removeToken();
-      window.location.href = '/signin';
+      // Если пользователь был на странице избранного, редиректим на главную
+      const currentPath = window.location.pathname;
+      if (currentPath === '/favorites') {
+        window.location.href = '/';
+      } else {
+        window.location.href = '/signin';
+      }
     } else {
       setIsAuthModalOpen(true);
     }
