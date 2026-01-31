@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { toast } from 'react-toastify';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import {
   setCurrentTrack,
@@ -24,6 +25,7 @@ import Filter from '@/components/Filter';
 import Playlist from '@/components/Playlist';
 import Sidebar from '@/components/Sidebar';
 import PlayerBar from '@/components/PlayerBar';
+import TracksLoader from '@/components/TracksLoader';
 import {
   applyAllFilters,
   hasActiveFilters,
@@ -74,9 +76,52 @@ export default function MainLayout({
   const [isLoading, setIsLoading] = useState(initialTracks === undefined);
   const [likeError, setLikeError] = useState<string | null>(null);
   const [likingTrackId, setLikingTrackId] = useState<number | null>(null);
-  // useRef для хранения значений между рендерами
+  const [dislikedTrackIds, setDislikedTrackIds] = useState<Set<number>>(new Set());
   const compilationIdRef = useRef<number | undefined>(compilationId);
   const requestCounterRef = useRef<number>(0);
+
+  const DISLIKED_STORAGE_KEY = 'skypro_disliked_track_ids';
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = localStorage.getItem(DISLIKED_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as unknown;
+        if (Array.isArray(parsed) && parsed.every((id) => typeof id === 'number')) {
+          setDislikedTrackIds(new Set(parsed as number[]));
+        }
+      }
+    } catch {
+      setDislikedTrackIds(new Set());
+    }
+  }, []);
+
+  const addToDisliked = useCallback((trackId: number) => {
+    setDislikedTrackIds((prev) => {
+      const next = new Set(prev);
+      next.add(trackId);
+      try {
+        localStorage.setItem(DISLIKED_STORAGE_KEY, JSON.stringify([...next]));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }, []);
+
+  const removeFromDisliked = useCallback((trackId: number) => {
+    setDislikedTrackIds((prev) => {
+      const next = new Set(prev);
+      next.delete(trackId);
+      try {
+        localStorage.setItem(DISLIKED_STORAGE_KEY, JSON.stringify([...next]));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }, []);
 
   // Сброс поиска и фильтров при переходе на другую страницу
   useEffect(() => {
@@ -332,9 +377,14 @@ export default function MainLayout({
     [tracks, filterState]
   );
 
+  const tracksForPlaylist = useMemo(
+    () => displayedTracks.filter((t) => !dislikedTrackIds.has(t._id)),
+    [displayedTracks, dislikedTrackIds]
+  );
+
   useEffect(() => {
-    dispatch(setPlaylist(displayedTracks));
-  }, [displayedTracks, dispatch]);
+    dispatch(setPlaylist(tracksForPlaylist));
+  }, [tracksForPlaylist, dispatch]);
 
   const handleFilterSelect = useCallback(
     (type: 'author' | 'genre' | 'year', value: string | number | null) => {
@@ -426,6 +476,18 @@ export default function MainLayout({
       dispatch(setIsPlaying(true));
     }
   }, [currentTrack, playlist, dispatch]);
+
+  const handleDislike = useCallback(() => {
+    if (!currentTrack) return;
+    addToDisliked(currentTrack._id);
+    handleNextTrack();
+    toast.info('Трек скрыт из рекомендаций');
+  }, [currentTrack, addToDisliked, handleNextTrack]);
+
+  const isCurrentTrackDisliked = useMemo(
+    () => (currentTrack ? dislikedTrackIds.has(currentTrack._id) : false),
+    [currentTrack, dislikedTrackIds]
+  );
 
   // Переключение режима перемешивания (мемоизирован)
   const handleToggleShuffle = useCallback(() => {
@@ -553,6 +615,8 @@ export default function MainLayout({
             onPrevTrack={handlePrevTrack}
             onToggleShuffle={handleToggleShuffle}
             onToggleLike={handleCurrentTrackToggleLike}
+            onDislike={handleDislike}
+            isDisliked={isCurrentTrackDisliked}
           />
           <footer className={styles.footer}></footer>
         </div>
@@ -576,13 +640,7 @@ export default function MainLayout({
               selectedYear={filterYear}
               onFilterSelect={handleFilterSelect}
             />
-            {isLoading && (
-              <div
-                style={{ color: '#fff', padding: '20px', textAlign: 'center' }}
-              >
-                Загрузка треков...
-              </div>
-            )}
+            {isLoading && <TracksLoader />}
             {error && (
               <div
                 style={{ color: 'red', padding: '20px', textAlign: 'center' }}
@@ -624,9 +682,15 @@ export default function MainLayout({
               <>
                 {displayedTracks.length === 0 && hasActiveFilters(filterState) ? (
                   <p className={styles.emptyMessage}>Нет подходящих треков</p>
+                ) : tracksForPlaylist.length === 0 ? (
+                  <p className={styles.emptyMessage}>
+                    {dislikedTrackIds.size > 0
+                      ? 'Треки из «Не рекомендовать» скрыты'
+                      : 'Нет треков для воспроизведения'}
+                  </p>
                 ) : (
                   <Playlist
-                    tracks={displayedTracks}
+                    tracks={tracksForPlaylist}
                     likedTracks={likedTracks}
                     onTrackSelect={handleTrackSelect}
                     onToggleLike={handleToggleLike}
@@ -648,6 +712,8 @@ export default function MainLayout({
           onPrevTrack={handlePrevTrack}
           onToggleShuffle={handleToggleShuffle}
           onToggleLike={handleCurrentTrackToggleLike}
+          onDislike={handleDislike}
+          isDisliked={isCurrentTrackDisliked}
         />
         <footer className={styles.footer}></footer>
       </div>
