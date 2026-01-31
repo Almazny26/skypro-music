@@ -4,18 +4,16 @@ import { useState } from 'react';
 import styles from './Search.module.css';
 
 interface SearchProps {
+  value?: string;
   onSearchChange?: (query: string) => void;
 }
 
-export default function Search({ onSearchChange }: SearchProps) {
-  const [searchQuery, setSearchQuery] = useState('');
+export default function Search({ value = '', onSearchChange }: SearchProps) {
+  const [isFocused, setIsFocused] = useState(false);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setSearchQuery(value);
-    if (onSearchChange) {
-      onSearchChange(value);
-    }
+    const newValue = e.target.value;
+    onSearchChange?.(newValue);
   };
 
   return (
@@ -26,10 +24,13 @@ export default function Search({ onSearchChange }: SearchProps) {
       <input
         className={styles.searchText}
         type="search"
-        placeholder="Поиск"
+        placeholder={isFocused ? '' : 'Поиск'}
         name="search"
-        value={searchQuery}
+        value={value}
         onChange={handleInputChange}
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
+        aria-label="Поиск треков"
       />
     </div>
   );

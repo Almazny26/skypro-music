@@ -479,6 +479,11 @@ export default function MainLayout({
 
   const handleDislike = useCallback(() => {
     if (!currentTrack) return;
+    const token = getToken();
+    if (!token || token.trim() === '') {
+      toast.info('Войдите, чтобы использовать «Не рекомендовать»');
+      return;
+    }
     addToDisliked(currentTrack._id);
     handleNextTrack();
     toast.info('Трек скрыт из рекомендаций');
@@ -505,6 +510,12 @@ export default function MainLayout({
   // Переключение лайка трека (с сервером по документации API, fallback на localStorage при ошибке)
   const handleToggleLike = useCallback(async (trackId: number) => {
     if (likingTrackId === trackId) return;
+
+    const token = getToken();
+    if (!token || token.trim() === '') {
+      toast.info('Войдите, чтобы добавить треки в избранное');
+      return;
+    }
 
     setLikingTrackId(trackId);
     setLikeError(null);
@@ -534,47 +545,37 @@ export default function MainLayout({
       }),
     );
 
-    const token = getToken();
-    if (token && token.trim() !== '') {
-      try {
-        if (isCurrentlyLiked) {
-          await removeTrackFromFavorites(trackId);
-        } else {
-          await addTrackToFavorites(trackId);
-        }
-        try {
-          const favoriteTracks = await getFavoriteTracks();
-          setLikedTracks(favoriteTracks.map((t) => t._id));
-          const updatedTracks = await getTracks();
-          setTracks(updatedTracks);
-        } catch (refreshErr) {}
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new Event('favoritesUpdated'));
-          if (onRemoveFromFavorites && isCurrentlyLiked) {
-            onRemoveFromFavorites(trackId);
-          }
-        }
-        setLikingTrackId(null);
-      } catch (err) {
-        setLikedTracks(previousLikedTracks);
-        setTracks(previousTracks);
-        const msg = err instanceof Error ? err.message : 'Не удалось обновить избранное.';
-        const isAuthError = msg.includes('токен') || msg.includes('401') || msg.includes('Токен') || msg.includes('недействителен');
-        if (isAuthError) {
-          removeToken();
-        }
-        setLikeError(isAuthError ? 'Токен недействителен или истек. Войдите заново.' : msg);
-        setTimeout(() => setLikeError(null), 5000);
-      } finally {
-        setLikingTrackId(null);
+    try {
+      if (isCurrentlyLiked) {
+        await removeTrackFromFavorites(trackId);
+      } else {
+        await addTrackToFavorites(trackId);
       }
-    } else {
+      try {
+        const favoriteTracks = await getFavoriteTracks();
+        setLikedTracks(favoriteTracks.map((t) => t._id));
+        const updatedTracks = await getTracks();
+        setTracks(updatedTracks);
+      } catch {
+        // обновление списка после лайка не критично
+      }
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new Event('favoritesUpdated'));
         if (onRemoveFromFavorites && isCurrentlyLiked) {
           onRemoveFromFavorites(trackId);
         }
       }
+    } catch (err) {
+      setLikedTracks(previousLikedTracks);
+      setTracks(previousTracks);
+      const msg = err instanceof Error ? err.message : 'Не удалось обновить избранное.';
+      const isAuthError = msg.includes('токен') || msg.includes('401') || msg.includes('Токен') || msg.includes('недействителен');
+      if (isAuthError) {
+        removeToken();
+      }
+      setLikeError(isAuthError ? 'Токен недействителен или истек. Войдите заново.' : msg);
+      setTimeout(() => setLikeError(null), 5000);
+    } finally {
       setLikingTrackId(null);
     }
   }, [likingTrackId, likedTracks, onRemoveFromFavorites, tracks]);
@@ -631,7 +632,7 @@ export default function MainLayout({
           <Navigation />
 
           <div className={styles.centerblock}>
-            <Search onSearchChange={handleSearchChange} />
+            <Search value={searchQuery} onSearchChange={handleSearchChange} />
             <h2 className={styles.h2}>{pageTitle || compilationName || 'Треки'}</h2>
             <Filter
               tracks={tracks}
@@ -682,15 +683,11 @@ export default function MainLayout({
               <>
                 {displayedTracks.length === 0 && hasActiveFilters(filterState) ? (
                   <p className={styles.emptyMessage}>Нет подходящих треков</p>
-                ) : tracksForPlaylist.length === 0 ? (
-                  <p className={styles.emptyMessage}>
-                    {dislikedTrackIds.size > 0
-                      ? 'Треки из «Не рекомендовать» скрыты'
-                      : 'Нет треков для воспроизведения'}
-                  </p>
+                ) : displayedTracks.length === 0 ? (
+                  <p className={styles.emptyMessage}>Нет треков для воспроизведения</p>
                 ) : (
                   <Playlist
-                    tracks={tracksForPlaylist}
+                    tracks={displayedTracks}
                     likedTracks={likedTracks}
                     onTrackSelect={handleTrackSelect}
                     onToggleLike={handleToggleLike}

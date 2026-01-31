@@ -1,13 +1,24 @@
 import type { Track } from '@/api/api';
 
-/** Поиск по первым буквам названия трека (без учёта регистра). */
+/** Расширенный поиск: вхождение строки в название, исполнителя, альбом и жанры (без учёта регистра). */
 export function filterTracksBySearch(tracks: Track[], query: string): Track[] {
   if (!Array.isArray(tracks)) return [];
   const trimmed = (query || '').trim().toLowerCase();
   if (trimmed === '') return [...tracks];
-  return tracks.filter((track) =>
-    (track.name || '').toLowerCase().startsWith(trimmed)
-  );
+  return tracks.filter((track) => {
+    const name = (track.name || '').toLowerCase();
+    const author = (track.author || '').toLowerCase();
+    const album = (track.album || '').toLowerCase();
+    const genres = Array.isArray(track.genre)
+      ? track.genre.join(' ').toLowerCase()
+      : '';
+    return (
+      name.includes(trimmed) ||
+      author.includes(trimmed) ||
+      album.includes(trimmed) ||
+      genres.includes(trimmed)
+    );
+  });
 }
 
 /** Фильтр по автору (точное совпадение). */

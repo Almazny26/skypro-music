@@ -126,6 +126,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
       }
 
       onClose();
+      router.push('/');
     } catch (err) {
       let errorMessage = isSignIn 
         ? 'Произошла ошибка при входе'
