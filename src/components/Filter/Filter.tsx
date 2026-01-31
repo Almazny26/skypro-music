@@ -1,58 +1,39 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { useAppDispatch } from '@/store/hooks';
-import { setPlaylist } from '@/store/trackSlice';
 import classNames from 'classnames';
 import styles from './Filter.module.css';
 import type { Track } from '@/api/api';
+import {
+  getUniqueAuthors,
+  getUniqueGenres,
+  getUniqueYears,
+} from '@/utils/filterUtils';
 
 type FilterType = 'author' | 'year' | 'genre' | null;
 
 interface FilterProps {
   tracks?: Track[];
+  selectedAuthor?: string | null;
+  selectedGenre?: string | null;
+  selectedYear?: number | null;
+  onFilterSelect?: (type: 'author' | 'genre' | 'year', value: string | number | null) => void;
 }
 
-export default function Filter({ tracks = [] }: FilterProps) {
-  const dispatch = useAppDispatch();
+export default function Filter({
+  tracks = [],
+  selectedAuthor = null,
+  selectedGenre = null,
+  selectedYear = null,
+  onFilterSelect,
+}: FilterProps) {
   const [openFilter, setOpenFilter] = useState<FilterType>(null);
 
-  const { uniqueAuthors, uniqueGenres, uniqueYears } = useMemo(() => {
-    const authors = new Set<string>();
-    const genres = new Set<string>();
-    const years = new Set<number>();
-
-    if (!tracks || !Array.isArray(tracks)) {
-      return {
-        uniqueAuthors: [],
-        uniqueGenres: [],
-        uniqueYears: [],
-      };
-    }
-
-    tracks.forEach((track) => {
-      if (track.author && track.author !== '-') {
-        authors.add(track.author);
-      }
-
-      if (track.genre) {
-        track.genre.forEach((g) => genres.add(g));
-      }
-
-      if (track.release_date) {
-        const year = new Date(track.release_date).getFullYear();
-        if (!isNaN(year)) {
-          years.add(year);
-        }
-      }
-    });
-
-    return {
-      uniqueAuthors: Array.from(authors).sort(),
-      uniqueGenres: Array.from(genres).sort(),
-      uniqueYears: Array.from(years).sort((a, b) => b - a),
-    };
-  }, [tracks]);
+  const { uniqueAuthors, uniqueGenres, uniqueYears } = useMemo(() => ({
+    uniqueAuthors: getUniqueAuthors(tracks),
+    uniqueGenres: getUniqueGenres(tracks),
+    uniqueYears: getUniqueYears(tracks),
+  }), [tracks]);
 
   const handleFilterClick = (filterType: 'author' | 'year' | 'genre') => {
     if (openFilter === filterType) {
@@ -64,35 +45,10 @@ export default function Filter({ tracks = [] }: FilterProps) {
 
   const handleFilterSelect = (
     filterType: 'author' | 'year' | 'genre',
-    value: string | number
+    value: string | number | null
   ) => {
     setOpenFilter(null);
-
-    if (!tracks || !Array.isArray(tracks)) {
-      return;
-    }
-
-    let filtered = tracks;
-
-    if (filterType === 'author') {
-      filtered = tracks.filter(
-        (track) => track.author === value && track.author !== '-'
-      );
-    } else if (filterType === 'year') {
-      filtered = tracks.filter((track) => {
-        if (track.release_date) {
-          const year = new Date(track.release_date).getFullYear();
-          return year === value;
-        }
-        return false;
-      });
-    } else if (filterType === 'genre') {
-      filtered = tracks.filter(
-        (track) => track.genre && track.genre.includes(value as string)
-      );
-    }
-
-    dispatch(setPlaylist(filtered));
+    onFilterSelect?.(filterType, value);
   };
 
   return (
@@ -102,7 +58,7 @@ export default function Filter({ tracks = [] }: FilterProps) {
       <div className={styles.filterWrapper}>
         <div
           className={classNames(styles.filter__button, {
-            [styles.active]: openFilter === 'author',
+            [styles.active]: openFilter === 'author' || selectedAuthor !== null,
           })}
           onClick={() => handleFilterClick('author')}
         >
@@ -111,9 +67,15 @@ export default function Filter({ tracks = [] }: FilterProps) {
         {openFilter === 'author' && (
           <div className={styles.dropdown}>
             <ul className={styles.filter__list}>
+              <li
+                className={classNames(styles.dropdownItem, styles.dropdownItemReset)}
+                onClick={() => handleFilterSelect('author', null)}
+              >
+                Без фильтра
+              </li>
               {uniqueAuthors.map((author) => (
-                <li 
-                  key={author} 
+                <li
+                  key={author}
                   className={styles.dropdownItem}
                   onClick={() => handleFilterSelect('author', author)}
                 >
@@ -128,7 +90,7 @@ export default function Filter({ tracks = [] }: FilterProps) {
       <div className={styles.filterWrapper}>
         <div
           className={classNames(styles.filter__button, {
-            [styles.active]: openFilter === 'year',
+            [styles.active]: openFilter === 'year' || selectedYear !== null,
           })}
           onClick={() => handleFilterClick('year')}
         >
@@ -142,9 +104,15 @@ export default function Filter({ tracks = [] }: FilterProps) {
                 styles.filter__listCompact,
               )}
             >
+              <li
+                className={classNames(styles.dropdownItem, styles.dropdownItemCompact, styles.dropdownItemReset)}
+                onClick={() => handleFilterSelect('year', null)}
+              >
+                Без фильтра
+              </li>
               {uniqueYears.map((year) => (
-                <li 
-                  key={year} 
+                <li
+                  key={year}
                   className={classNames(styles.dropdownItem, styles.dropdownItemCompact)}
                   onClick={() => handleFilterSelect('year', year)}
                 >
@@ -159,7 +127,7 @@ export default function Filter({ tracks = [] }: FilterProps) {
       <div className={styles.filterWrapper}>
         <div
           className={classNames(styles.filter__button, {
-            [styles.active]: openFilter === 'genre',
+            [styles.active]: openFilter === 'genre' || selectedGenre !== null,
           })}
           onClick={() => handleFilterClick('genre')}
         >
@@ -168,9 +136,15 @@ export default function Filter({ tracks = [] }: FilterProps) {
         {openFilter === 'genre' && (
           <div className={styles.dropdown}>
             <ul className={styles.filter__list}>
+              <li
+                className={classNames(styles.dropdownItem, styles.dropdownItemReset)}
+                onClick={() => handleFilterSelect('genre', null)}
+              >
+                Без фильтра
+              </li>
               {uniqueGenres.map((genre) => (
-                <li 
-                  key={genre} 
+                <li
+                  key={genre}
                   className={styles.dropdownItem}
                   onClick={() => handleFilterSelect('genre', genre)}
                 >

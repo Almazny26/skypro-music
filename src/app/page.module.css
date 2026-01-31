@@ -45,3 +45,14 @@
 .footer {
   /* Footer styles if needed */
 }
+
+.emptyMessage {
+  font-style: normal;
+  font-weight: 400;
+  font-size: 16px;
+  line-height: 24px;
+  color: #ffffff;
+  text-align: center;
+  padding: 40px 20px;
+  margin: 0;
+}
