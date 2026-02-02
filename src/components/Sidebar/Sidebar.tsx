@@ -3,15 +3,51 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import styles from './Sidebar.module.css';
-import { getUsername, getToken, removeToken } from '@/api/api';
+import { getUsername, getToken, removeToken, getCompilations } from '@/api/api';
+import type { CompilationResponse } from '@/api/api';
 import LogoutModal from '../LogoutModal';
 import AuthModal from '../AuthModal';
+
+const PLAYLIST_IMAGES = ['/img/playlist01.png', '/img/playlist02.png', '/img/playlist03.png'];
+
+// Порядок подборок: 1-я картинка = Плейлист дня, 2-я = 100 танцевальных хитов, 3-я = Инди заряд
+function compilationSortOrder(name: string): number {
+  const n = (name || '').toLowerCase();
+  if (n.includes('плейлист') && n.includes('дня')) return 0;
+  if (n.includes('инди') && n.includes('заряд')) return 2;
+  // «100 танцевальных хитов» — разные варианты названия с API
+  if ((n.includes('100') && (n.includes('хит') || n.includes('танцевальн'))) ||
+      (n.includes('танцевальн') && n.includes('хит'))) return 1;
+  return 99;
+}
 
 export default function Sidebar() {
   const [username, setUsername] = useState<string>('');
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [compilations, setCompilations] = useState<CompilationResponse[]>([]);
+
+  useEffect(() => {
+    const loadCompilations = async () => {
+      try {
+        const list = await getCompilations();
+        const withTracks = list.filter(
+          (c) => (c.tracks && c.tracks.length > 0) || (c.items && c.items.length > 0)
+        );
+        withTracks.sort((a, b) => {
+          const orderA = compilationSortOrder(a.name);
+          const orderB = compilationSortOrder(b.name);
+          if (orderA !== orderB) return orderA - orderB;
+          return (a.name || '').localeCompare(b.name || '');
+        });
+        setCompilations(withTracks);
+      } catch {
+        setCompilations([]);
+      }
+    };
+    loadCompilations();
+  }, []);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -98,33 +134,17 @@ export default function Sidebar() {
 
       <div className={styles.block}>
         <div className={styles.list}>
-          <div className={styles.item}>
-            <Link className={styles.link} href="/compilations/1">
-              <img
-                className={styles.img}
-                src="/img/playlist01.png"
-                alt="playlist"
-              />
-            </Link>
-          </div>
-          <div className={styles.item}>
-            <Link className={styles.link} href="/compilations/2">
-              <img
-                className={styles.img}
-                src="/img/playlist02.png"
-                alt="playlist"
-              />
-            </Link>
-          </div>
-          <div className={styles.item}>
-            <Link className={styles.link} href="/compilations/3">
-              <img
-                className={styles.img}
-                src="/img/playlist03.png"
-                alt="playlist"
-              />
-            </Link>
-          </div>
+          {compilations.map((comp, index) => (
+            <div key={comp.id} className={styles.item}>
+              <Link className={styles.link} href={`/compilations/${comp.id}`}>
+                <img
+                  className={styles.img}
+                  src={PLAYLIST_IMAGES[index % PLAYLIST_IMAGES.length]}
+                  alt={comp.name || 'Подборка'}
+                />
+              </Link>
+            </div>
+          ))}
         </div>
       </div>
     </div>

@@ -194,23 +194,13 @@ export default function MainLayout({
         setTracks([]);
       }
 
-      // Маппинг названий подборок
-      const compilationNames: Record<number, string> = {
-        1: 'Плейлист дня',
-        2: '100 танцевальных хитов',
-        3: 'Инди-заряд',
-      };
-
-      // Устанавливаем название подборки
+      // До загрузки не показываем название — только после ответа API (из compilation.name)
       if (
         currentCompilationId !== undefined &&
         currentCompilationId !== null &&
         !isNaN(currentCompilationId)
       ) {
-        const mappedName =
-          compilationNames[currentCompilationId] ||
-          `Подборка ${currentCompilationId}`;
-        setCompilationName(mappedName);
+        setCompilationName(null);
       }
 
       try {
@@ -260,10 +250,8 @@ export default function MainLayout({
             }
           }
 
-          // Устанавливаем название подборки
-          if (currentCompilationId && compilationNames[currentCompilationId]) {
-            compilationNameToSet = compilationNames[currentCompilationId];
-          } else if (currentCompilationId) {
+          // Название только из API; fallback — «Подборка N»
+          if (currentCompilationId) {
             compilationNameToSet =
               compilation.name && compilation.name.trim()
                 ? compilation.name

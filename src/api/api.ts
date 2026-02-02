@@ -648,8 +648,42 @@ export async function getCompilation(
   };
 }
 
+type CompilationListItem = CompilationResponse | (Omit<CompilationResponse, 'id'> & { _id?: number });
+
+function normalizeCompilation(item: CompilationListItem): CompilationResponse {
+  const id = 'id' in item ? item.id : ('_id' in item ? item._id : 0);
+  return {
+    id: Number(id) || 0,
+    name: item.name ?? '',
+    owner: typeof item.owner === 'string' ? item.owner : (Array.isArray(item.owner) ? item.owner.join(', ') : ''),
+    tracks: item.tracks ?? [],
+    items: item.items,
+  };
+}
+
 export async function getCompilations(): Promise<CompilationResponse[]> {
-  return fetchAPI<CompilationResponse[]>('/catalog/selection/');
+  const parse = (response: CompilationListItem[] | { data?: CompilationListItem[]; items?: CompilationListItem[] }): CompilationResponse[] => {
+    let list: CompilationListItem[] = [];
+    if (Array.isArray(response)) {
+      list = response;
+    } else {
+      const data = response as { data?: CompilationListItem[]; items?: CompilationListItem[] };
+      if (data.data && Array.isArray(data.data)) list = data.data;
+      else if (data.items && Array.isArray(data.items)) list = data.items;
+    }
+    return list.map(normalizeCompilation).filter((c) => c.id > 0);
+  };
+  try {
+    const response = await fetchAPI<CompilationListItem[] | { data?: CompilationListItem[]; items?: CompilationListItem[] }>('/catalog/selection/all');
+    return parse(response);
+  } catch {
+    try {
+      const response = await fetchAPI<CompilationListItem[] | { data?: CompilationListItem[]; items?: CompilationListItem[] }>('/catalog/selection/');
+      return parse(response);
+    } catch {
+      return [];
+    }
+  }
 }
 
 // Добавить трек в избранное (Authorization: Bearer access, по документации API)
