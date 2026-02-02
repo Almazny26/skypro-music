@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useEffect, useState } from 'react';
+import { toast } from 'react-toastify';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
 import {
   setCurrentTime as setCurrentTimeAction,
@@ -17,6 +18,8 @@ interface PlayerBarProps {
   onPrevTrack: () => void;
   onToggleShuffle: () => void;
   onToggleLike: () => void;
+  onDislike?: () => void;
+  isDisliked?: boolean;
 }
 
 export default function PlayerBar({
@@ -27,6 +30,8 @@ export default function PlayerBar({
   onPrevTrack,
   onToggleShuffle,
   onToggleLike,
+  onDislike,
+  isDisliked = false,
 }: PlayerBarProps) {
   const dispatch = useAppDispatch();
   const currentTrack = useAppSelector((state) => state.track.currentTrack);
@@ -359,9 +364,15 @@ export default function PlayerBar({
                   </svg>
                 </div>
                 <div
-                  className={`${styles.dislikeBtn} ${styles.btnIcon} ${styles.btn}`}
-                  onClick={() => alert('Еще не реализовано')}
-                  style={{ cursor: 'pointer' }}
+                  className={`${styles.dislikeBtn} ${styles.btnIcon} ${styles.btn} ${
+                    isDisliked ? styles.active : ''
+                  }`}
+                  onClick={currentTrack ? onDislike : undefined}
+                  style={{
+                    cursor: currentTrack && onDislike ? 'pointer' : 'default',
+                    opacity: currentTrack ? 1 : 0.5,
+                  }}
+                  title="Не рекомендовать"
                 >
                   <svg className={styles.dislikeSvg}>
                     <use href="/img/icon/sprite.svg#icon-dislike"></use>

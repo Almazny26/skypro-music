@@ -89,11 +89,8 @@ async function handleRequest(
       // На сервере credentials не нужен, cookies передаются через заголовок Cookie
     });
 
-    // Получаем данные ответа
-    // Важно: читаем ответ только один раз
-    const responseClone = response.clone();
     const data = await response.text();
-    let jsonData: any;
+    let jsonData: unknown;
     try {
       jsonData = JSON.parse(data);
     } catch {

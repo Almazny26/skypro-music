@@ -15,6 +15,23 @@ export interface RegisterRequest {
   password: string;
 }
 
+export interface LoginResponse {
+  email?: string;
+  username?: string;
+  _id?: number;
+  id?: number;
+}
+
+export interface SignupResponse {
+  message?: string;
+  result?: { username?: string; email?: string; _id?: number; id?: number };
+  success?: boolean;
+  _id?: number;
+  id?: number;
+  username?: string;
+  email?: string;
+}
+
 export interface AuthResponse {
   access?: string;
   refresh?: string;
@@ -23,8 +40,7 @@ export interface AuthResponse {
   _id?: number;
   token?: string;
   accessToken?: string;
-  // Сервер может возвращать токен в разных полях
-  [key: string]: any;
+  [key: string]: string | number | undefined;
 }
 
 export interface Track {
@@ -182,17 +198,18 @@ export async function refreshAccessToken(): Promise<string | null> {
       return null;
     }
 
-    const data = await response.json();
-    const newAccessToken = data.access || data.token || data.accessToken;
-    if (newAccessToken) {
+    const data = (await response.json()) as Record<string, unknown>;
+    const newAccessToken = (data.access ?? data.token ?? data.accessToken) as string | undefined;
+    if (typeof newAccessToken === 'string' && newAccessToken) {
       setToken(newAccessToken);
-      if (data.refresh) {
-        setRefreshToken(data.refresh);
+      const newRefresh = data.refresh;
+      if (typeof newRefresh === 'string' && newRefresh) {
+        setRefreshToken(newRefresh);
       }
       return newAccessToken;
     }
     return null;
-  } catch (error) {
+  } catch {
     removeToken();
     return null;
   }
@@ -202,56 +219,46 @@ export async function refreshAccessToken(): Promise<string | null> {
 let refreshTokenPromise: Promise<string | null> | null = null;
 
 // Обертка для функций API с автоматическим обновлением токена при 401
-export function withReAuth<T extends (...args: any[]) => Promise<any>>(
-  apiFunction: T
-): T {
-  return (async (...args: Parameters<T>): Promise<ReturnType<T>> => {
+export function withReAuth<A extends unknown[], R>(
+  apiFunction: (...args: A) => Promise<R>
+): (...args: A) => Promise<R> {
+  return async (...args: A): Promise<R> => {
     try {
       return await apiFunction(...args);
-    } catch (error: any) {
-      // Проверяем, является ли ошибка 401
-      if (error?.message?.includes('401') || 
-          error?.message?.includes('токен') || 
-          error?.message?.includes('Токен') ||
-          error?.message?.includes('недействителен')) {
-        
-        // Если уже идет обновление токена, ждем его завершения
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (
+        message.includes('401') ||
+        message.includes('токен') ||
+        message.includes('Токен') ||
+        message.includes('недействителен')
+      ) {
         if (refreshTokenPromise) {
           const newToken = await refreshTokenPromise;
           if (newToken) {
-            // Повторяем запрос с новым токеном
             try {
               return await apiFunction(...args);
             } catch (retryError) {
               throw retryError;
             }
-          } else {
-            throw error;
           }
-        } else {
-          // Начинаем обновление токена
-          refreshTokenPromise = refreshAccessToken();
-          const newToken = await refreshTokenPromise;
-          refreshTokenPromise = null;
-          
-          if (newToken) {
-            // Повторяем запрос с новым токеном
-            try {
-              return await apiFunction(...args);
-            } catch (retryError) {
-              throw retryError;
-            }
-          } else {
-            // Если обновление токена не удалось, пробрасываем ошибку
-            throw error;
+          throw error;
+        }
+        refreshTokenPromise = refreshAccessToken();
+        const newToken = await refreshTokenPromise;
+        refreshTokenPromise = null;
+        if (newToken) {
+          try {
+            return await apiFunction(...args);
+          } catch (retryError) {
+            throw retryError;
           }
         }
-      } else {
-        // Для других ошибок просто пробрасываем
         throw error;
       }
+      throw error;
     }
-  }) as T;
+  };
 }
 
 async function fetchAPI<T>(
@@ -329,50 +336,49 @@ async function fetchAPI<T>(
   if (!response.ok) {
     let errorMessage = `Ошибка: ${response.status}`;
 
-    // Читаем ответ один раз
     let text = '';
-    let errorData: any = null;
-    
+    let errorData: unknown = null;
+
     try {
       text = await response.text();
       if (text && text.trim()) {
         try {
           errorData = JSON.parse(text);
         } catch {
-          // Если не JSON, используем текст как есть
           errorData = { detail: text };
         }
       }
-    } catch (parseError) {
-      // Если не удалось прочитать ответ
+    } catch {
+      // не удалось прочитать ответ
     }
 
-    // Обработка специфичных статусов
+    const errObj = errorData && typeof errorData === 'object' && !Array.isArray(errorData)
+      ? (errorData as Record<string, unknown>) : null;
+
     if (response.status === 401) {
-      if (errorData?.detail) {
-        errorMessage = errorData.detail;
-      } else if (errorData?.message) {
-        errorMessage = errorData.message;
+      if (errObj?.detail) {
+        errorMessage = String(errObj.detail);
+      } else if (errObj?.message) {
+        errorMessage = String(errObj.message);
       } else if (text && text.trim()) {
         errorMessage = text;
       } else {
         errorMessage = 'Токен недействителен или истек. Пожалуйста, войдите заново.';
       }
     } else if (response.status === 403) {
-      errorMessage = errorData?.detail || errorData?.message || 'Доступ запрещен';
+      errorMessage = (errObj?.detail ?? errObj?.message) ? String(errObj.detail ?? errObj.message) : 'Доступ запрещен';
     } else if (response.status === 404) {
-      errorMessage = errorData?.detail || errorData?.message || 'Ресурс не найден';
+      errorMessage = (errObj?.detail ?? errObj?.message) ? String(errObj.detail ?? errObj.message) : 'Ресурс не найден';
     } else if (response.status === 500) {
-      errorMessage = errorData?.detail || errorData?.message || 'Ошибка сервера. Попробуйте позже';
+      errorMessage = (errObj?.detail ?? errObj?.message) ? String(errObj.detail ?? errObj.message) : 'Ошибка сервера. Попробуйте позже';
     } else if (response.status === 503) {
-      errorMessage = errorData?.detail || errorData?.message || 'Сервис временно недоступен. Попробуйте позже';
+      errorMessage = (errObj?.detail ?? errObj?.message) ? String(errObj.detail ?? errObj.message) : 'Сервис временно недоступен. Попробуйте позже';
     } else {
-      // Для других ошибок пытаемся извлечь сообщение из errorData
-      if (errorData) {
+      if (errorData !== null && errorData !== undefined) {
         if (typeof errorData === 'string') {
           errorMessage = errorData;
-        } else if (errorData.data?.errors) {
-          const errors = errorData.data.errors;
+        } else if (errObj?.data && typeof errObj.data === 'object' && errObj.data !== null && 'errors' in errObj.data) {
+          const errors = (errObj.data as Record<string, Record<string, string | string[]>>).errors;
           const errorMessages: string[] = [];
           for (const [field, messages] of Object.entries(errors)) {
             if (Array.isArray(messages) && messages.length > 0) {
@@ -400,22 +406,21 @@ async function fetchAPI<T>(
           errorMessage =
             errorMessages.length > 0
               ? errorMessages.join(', ')
-              : errorData.message || errorMessage;
-        } else if (errorData.detail) {
-          errorMessage = errorData.detail;
-        } else if (errorData.message) {
-          errorMessage = errorData.message;
-        } else if (errorData.error) {
-          errorMessage = errorData.error;
+              : (errObj?.message ? String(errObj.message) : errorMessage);
+        } else if (errObj?.detail) {
+          errorMessage = String(errObj.detail);
+        } else if (errObj?.message) {
+          errorMessage = String(errObj.message);
+        } else if (errObj?.error) {
+          errorMessage = String(errObj.error);
         } else if (Array.isArray(errorData) && errorData.length > 0) {
-          errorMessage = Array.isArray(errorData[0])
-            ? errorData[0][0]
-            : String(errorData[0]);
-        } else if (typeof errorData === 'object') {
-          const keys = Object.keys(errorData);
+          const first = errorData[0];
+          errorMessage = Array.isArray(first) ? String(first[0]) : String(first);
+        } else if (errObj) {
+          const keys = Object.keys(errObj);
           if (keys.length > 0) {
             const firstKey = keys[0];
-            const firstValue = errorData[firstKey];
+            const firstValue = errObj[firstKey];
             if (Array.isArray(firstValue) && firstValue.length > 0) {
               errorMessage = String(firstValue[0]);
             } else if (typeof firstValue === 'string') {
@@ -426,7 +431,7 @@ async function fetchAPI<T>(
               )}`;
             }
           } else {
-            errorMessage = JSON.stringify(errorData);
+            errorMessage = JSON.stringify(errObj);
           }
         }
       }
@@ -436,14 +441,14 @@ async function fetchAPI<T>(
   }
 
   const contentType = response.headers.get('content-type');
-  let data: any;
-  
+  let data: unknown;
+
   if (contentType && contentType.includes('application/json')) {
     data = await response.json();
   } else {
     data = await response.text();
   }
-  
+
   return data as T;
 }
 
@@ -454,8 +459,10 @@ async function getTokens(email: string, password: string): Promise<{ access: str
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
-    const access = response.access || response.token || response.accessToken;
-    const refresh = response.refresh || response.refreshToken || response.refresh_token || '';
+    const accessRaw = response.access ?? response.token ?? response.accessToken;
+    const refreshRaw = response.refresh ?? response.refreshToken ?? (response as Record<string, unknown>).refresh_token;
+    const access = typeof accessRaw === 'string' ? accessRaw : '';
+    const refresh = typeof refreshRaw === 'string' ? refreshRaw : '';
     if (access && refresh) {
       return { access, refresh };
     }
@@ -468,8 +475,7 @@ async function getTokens(email: string, password: string): Promise<{ access: str
 export async function login(credentials: LoginRequest): Promise<AuthResponse> {
   const email = credentials.email || credentials.username || '';
 
-  // 1. Вход — проверка учётных данных и получение данных пользователя (токенов /user/login/ не возвращает)
-  const loginResponse = await fetchAPI<any>('/user/login/', {
+  const loginResponse = await fetchAPI<LoginResponse>('/user/login/', {
     method: 'POST',
     body: JSON.stringify({ email, password: credentials.password }),
   });
@@ -513,8 +519,7 @@ export async function register(data: RegisterRequest): Promise<AuthResponse> {
     username = data.email;
   }
 
-  // 1. Регистрация (токенов /user/signup/ не возвращает)
-  const signupResponse = await fetchAPI<any>('/user/signup/', {
+  const signupResponse = await fetchAPI<SignupResponse>('/user/signup/', {
     method: 'POST',
     body: JSON.stringify({ username, email: data.email, password: data.password }),
   });
@@ -643,8 +648,42 @@ export async function getCompilation(
   };
 }
 
+type CompilationListItem = CompilationResponse | (Omit<CompilationResponse, 'id'> & { _id?: number });
+
+function normalizeCompilation(item: CompilationListItem): CompilationResponse {
+  const id = 'id' in item ? item.id : ('_id' in item ? item._id : 0);
+  return {
+    id: Number(id) || 0,
+    name: item.name ?? '',
+    owner: typeof item.owner === 'string' ? item.owner : (Array.isArray(item.owner) ? item.owner.join(', ') : ''),
+    tracks: item.tracks ?? [],
+    items: item.items,
+  };
+}
+
 export async function getCompilations(): Promise<CompilationResponse[]> {
-  return fetchAPI<CompilationResponse[]>('/catalog/selection/');
+  const parse = (response: CompilationListItem[] | { data?: CompilationListItem[]; items?: CompilationListItem[] }): CompilationResponse[] => {
+    let list: CompilationListItem[] = [];
+    if (Array.isArray(response)) {
+      list = response;
+    } else {
+      const data = response as { data?: CompilationListItem[]; items?: CompilationListItem[] };
+      if (data.data && Array.isArray(data.data)) list = data.data;
+      else if (data.items && Array.isArray(data.items)) list = data.items;
+    }
+    return list.map(normalizeCompilation).filter((c) => c.id > 0);
+  };
+  try {
+    const response = await fetchAPI<CompilationListItem[] | { data?: CompilationListItem[]; items?: CompilationListItem[] }>('/catalog/selection/all');
+    return parse(response);
+  } catch {
+    try {
+      const response = await fetchAPI<CompilationListItem[] | { data?: CompilationListItem[]; items?: CompilationListItem[] }>('/catalog/selection/');
+      return parse(response);
+    } catch {
+      return [];
+    }
+  }
 }
 
 // Добавить трек в избранное (Authorization: Bearer access, по документации API)

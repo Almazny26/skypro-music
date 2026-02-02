@@ -65,17 +65,23 @@ describe('filterUtils', () => {
       expect(result).not.toBe(mockTracks);
     });
 
-    it('возвращает треки по первым буквам названия (без учёта регистра)', () => {
+    it('возвращает треки по вхождению в названии, исполнителе, альбоме и жанрах (без учёта регистра)', () => {
       expect(filterTracksBySearch(mockTracks, 'Al')).toHaveLength(2);
       expect(filterTracksBySearch(mockTracks, 'al')).toHaveLength(2);
       expect(filterTracksBySearch(mockTracks, 'Alpha')).toHaveLength(2);
-      expect(filterTracksBySearch(mockTracks, 'Beta')).toHaveLength(1);
+      expect(filterTracksBySearch(mockTracks, 'Beta')).toHaveLength(2);
       expect(filterTracksBySearch(mockTracks, 'Gamma')).toHaveLength(1);
+      expect(filterTracksBySearch(mockTracks, 'Song')).toHaveLength(1);
+      expect(filterTracksBySearch(mockTracks, 'Track')).toHaveLength(1);
+      expect(filterTracksBySearch(mockTracks, 'Artist')).toHaveLength(3);
+      expect(filterTracksBySearch(mockTracks, 'Album')).toHaveLength(4);
+      expect(filterTracksBySearch(mockTracks, 'Rock')).toHaveLength(2);
+      expect(filterTracksBySearch(mockTracks, 'Jazz')).toHaveLength(1);
     });
 
-    it('не возвращает треки при несовпадении начала названия', () => {
-      expect(filterTracksBySearch(mockTracks, 'Song')).toHaveLength(0);
-      expect(filterTracksBySearch(mockTracks, 'Track')).toHaveLength(0);
+    it('не возвращает треки при отсутствии вхождения', () => {
+      expect(filterTracksBySearch(mockTracks, 'xyz')).toHaveLength(0);
+      expect(filterTracksBySearch(mockTracks, 'Unknown')).toHaveLength(0);
     });
 
     it('обрезает пробелы в запросе', () => {

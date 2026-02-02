@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import MainLayout from '../MainLayout';
+import TracksLoader from '@/components/TracksLoader';
 import type { Track } from '@/api/api';
 import { getFavoriteTracks, getToken, getUsername } from '@/api/api';
 
@@ -77,9 +78,7 @@ export default function FavoritesPage() {
   if (isLoading) {
     return (
       <MainLayout>
-        <div style={{ color: '#fff', padding: '20px', textAlign: 'center' }}>
-          Загрузка избранных треков...
-        </div>
+        <TracksLoader />
       </MainLayout>
     );
   }

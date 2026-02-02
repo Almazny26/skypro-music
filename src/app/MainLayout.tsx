@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { toast } from 'react-toastify';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import {
   setCurrentTrack,
@@ -24,6 +25,7 @@ import Filter from '@/components/Filter';
 import Playlist from '@/components/Playlist';
 import Sidebar from '@/components/Sidebar';
 import PlayerBar from '@/components/PlayerBar';
+import TracksLoader from '@/components/TracksLoader';
 import {
   applyAllFilters,
   hasActiveFilters,
@@ -74,9 +76,52 @@ export default function MainLayout({
   const [isLoading, setIsLoading] = useState(initialTracks === undefined);
   const [likeError, setLikeError] = useState<string | null>(null);
   const [likingTrackId, setLikingTrackId] = useState<number | null>(null);
-  // useRef для хранения значений между рендерами
+  const [dislikedTrackIds, setDislikedTrackIds] = useState<Set<number>>(new Set());
   const compilationIdRef = useRef<number | undefined>(compilationId);
   const requestCounterRef = useRef<number>(0);
+
+  const DISLIKED_STORAGE_KEY = 'skypro_disliked_track_ids';
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = localStorage.getItem(DISLIKED_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as unknown;
+        if (Array.isArray(parsed) && parsed.every((id) => typeof id === 'number')) {
+          setDislikedTrackIds(new Set(parsed as number[]));
+        }
+      }
+    } catch {
+      setDislikedTrackIds(new Set());
+    }
+  }, []);
+
+  const addToDisliked = useCallback((trackId: number) => {
+    setDislikedTrackIds((prev) => {
+      const next = new Set(prev);
+      next.add(trackId);
+      try {
+        localStorage.setItem(DISLIKED_STORAGE_KEY, JSON.stringify([...next]));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }, []);
+
+  const removeFromDisliked = useCallback((trackId: number) => {
+    setDislikedTrackIds((prev) => {
+      const next = new Set(prev);
+      next.delete(trackId);
+      try {
+        localStorage.setItem(DISLIKED_STORAGE_KEY, JSON.stringify([...next]));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }, []);
 
   // Сброс поиска и фильтров при переходе на другую страницу
   useEffect(() => {
@@ -149,23 +194,13 @@ export default function MainLayout({
         setTracks([]);
       }
 
-      // Маппинг названий подборок
-      const compilationNames: Record<number, string> = {
-        1: 'Плейлист дня',
-        2: '100 танцевальных хитов',
-        3: 'Инди-заряд',
-      };
-
-      // Устанавливаем название подборки
+      // До загрузки не показываем название — только после ответа API (из compilation.name)
       if (
         currentCompilationId !== undefined &&
         currentCompilationId !== null &&
         !isNaN(currentCompilationId)
       ) {
-        const mappedName =
-          compilationNames[currentCompilationId] ||
-          `Подборка ${currentCompilationId}`;
-        setCompilationName(mappedName);
+        setCompilationName(null);
       }
 
       try {
@@ -215,10 +250,8 @@ export default function MainLayout({
             }
           }
 
-          // Устанавливаем название подборки
-          if (currentCompilationId && compilationNames[currentCompilationId]) {
-            compilationNameToSet = compilationNames[currentCompilationId];
-          } else if (currentCompilationId) {
+          // Название только из API; fallback — «Подборка N»
+          if (currentCompilationId) {
             compilationNameToSet =
               compilation.name && compilation.name.trim()
                 ? compilation.name
@@ -332,9 +365,14 @@ export default function MainLayout({
     [tracks, filterState]
   );
 
+  const tracksForPlaylist = useMemo(
+    () => displayedTracks.filter((t) => !dislikedTrackIds.has(t._id)),
+    [displayedTracks, dislikedTrackIds]
+  );
+
   useEffect(() => {
-    dispatch(setPlaylist(displayedTracks));
-  }, [displayedTracks, dispatch]);
+    dispatch(setPlaylist(tracksForPlaylist));
+  }, [tracksForPlaylist, dispatch]);
 
   const handleFilterSelect = useCallback(
     (type: 'author' | 'genre' | 'year', value: string | number | null) => {
@@ -427,6 +465,23 @@ export default function MainLayout({
     }
   }, [currentTrack, playlist, dispatch]);
 
+  const handleDislike = useCallback(() => {
+    if (!currentTrack) return;
+    const token = getToken();
+    if (!token || token.trim() === '') {
+      toast.info('Войдите, чтобы использовать «Не рекомендовать»');
+      return;
+    }
+    addToDisliked(currentTrack._id);
+    handleNextTrack();
+    toast.info('Трек скрыт из рекомендаций');
+  }, [currentTrack, addToDisliked, handleNextTrack]);
+
+  const isCurrentTrackDisliked = useMemo(
+    () => (currentTrack ? dislikedTrackIds.has(currentTrack._id) : false),
+    [currentTrack, dislikedTrackIds]
+  );
+
   // Переключение режима перемешивания (мемоизирован)
   const handleToggleShuffle = useCallback(() => {
     setIsShuffled((prev) => {
@@ -443,6 +498,12 @@ export default function MainLayout({
   // Переключение лайка трека (с сервером по документации API, fallback на localStorage при ошибке)
   const handleToggleLike = useCallback(async (trackId: number) => {
     if (likingTrackId === trackId) return;
+
+    const token = getToken();
+    if (!token || token.trim() === '') {
+      toast.info('Войдите, чтобы добавить треки в избранное');
+      return;
+    }
 
     setLikingTrackId(trackId);
     setLikeError(null);
@@ -472,47 +533,37 @@ export default function MainLayout({
       }),
     );
 
-    const token = getToken();
-    if (token && token.trim() !== '') {
-      try {
-        if (isCurrentlyLiked) {
-          await removeTrackFromFavorites(trackId);
-        } else {
-          await addTrackToFavorites(trackId);
-        }
-        try {
-          const favoriteTracks = await getFavoriteTracks();
-          setLikedTracks(favoriteTracks.map((t) => t._id));
-          const updatedTracks = await getTracks();
-          setTracks(updatedTracks);
-        } catch (refreshErr) {}
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new Event('favoritesUpdated'));
-          if (onRemoveFromFavorites && isCurrentlyLiked) {
-            onRemoveFromFavorites(trackId);
-          }
-        }
-        setLikingTrackId(null);
-      } catch (err) {
-        setLikedTracks(previousLikedTracks);
-        setTracks(previousTracks);
-        const msg = err instanceof Error ? err.message : 'Не удалось обновить избранное.';
-        const isAuthError = msg.includes('токен') || msg.includes('401') || msg.includes('Токен') || msg.includes('недействителен');
-        if (isAuthError) {
-          removeToken();
-        }
-        setLikeError(isAuthError ? 'Токен недействителен или истек. Войдите заново.' : msg);
-        setTimeout(() => setLikeError(null), 5000);
-      } finally {
-        setLikingTrackId(null);
+    try {
+      if (isCurrentlyLiked) {
+        await removeTrackFromFavorites(trackId);
+      } else {
+        await addTrackToFavorites(trackId);
       }
-    } else {
+      try {
+        const favoriteTracks = await getFavoriteTracks();
+        setLikedTracks(favoriteTracks.map((t) => t._id));
+        const updatedTracks = await getTracks();
+        setTracks(updatedTracks);
+      } catch {
+        // обновление списка после лайка не критично
+      }
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new Event('favoritesUpdated'));
         if (onRemoveFromFavorites && isCurrentlyLiked) {
           onRemoveFromFavorites(trackId);
         }
       }
+    } catch (err) {
+      setLikedTracks(previousLikedTracks);
+      setTracks(previousTracks);
+      const msg = err instanceof Error ? err.message : 'Не удалось обновить избранное.';
+      const isAuthError = msg.includes('токен') || msg.includes('401') || msg.includes('Токен') || msg.includes('недействителен');
+      if (isAuthError) {
+        removeToken();
+      }
+      setLikeError(isAuthError ? 'Токен недействителен или истек. Войдите заново.' : msg);
+      setTimeout(() => setLikeError(null), 5000);
+    } finally {
       setLikingTrackId(null);
     }
   }, [likingTrackId, likedTracks, onRemoveFromFavorites, tracks]);
@@ -553,6 +604,8 @@ export default function MainLayout({
             onPrevTrack={handlePrevTrack}
             onToggleShuffle={handleToggleShuffle}
             onToggleLike={handleCurrentTrackToggleLike}
+            onDislike={handleDislike}
+            isDisliked={isCurrentTrackDisliked}
           />
           <footer className={styles.footer}></footer>
         </div>
@@ -567,7 +620,7 @@ export default function MainLayout({
           <Navigation />
 
           <div className={styles.centerblock}>
-            <Search onSearchChange={handleSearchChange} />
+            <Search value={searchQuery} onSearchChange={handleSearchChange} />
             <h2 className={styles.h2}>{pageTitle || compilationName || 'Треки'}</h2>
             <Filter
               tracks={tracks}
@@ -576,13 +629,7 @@ export default function MainLayout({
               selectedYear={filterYear}
               onFilterSelect={handleFilterSelect}
             />
-            {isLoading && (
-              <div
-                style={{ color: '#fff', padding: '20px', textAlign: 'center' }}
-              >
-                Загрузка треков...
-              </div>
-            )}
+            {isLoading && <TracksLoader />}
             {error && (
               <div
                 style={{ color: 'red', padding: '20px', textAlign: 'center' }}
@@ -624,6 +671,8 @@ export default function MainLayout({
               <>
                 {displayedTracks.length === 0 && hasActiveFilters(filterState) ? (
                   <p className={styles.emptyMessage}>Нет подходящих треков</p>
+                ) : displayedTracks.length === 0 ? (
+                  <p className={styles.emptyMessage}>Нет треков для воспроизведения</p>
                 ) : (
                   <Playlist
                     tracks={displayedTracks}
@@ -648,6 +697,8 @@ export default function MainLayout({
           onPrevTrack={handlePrevTrack}
           onToggleShuffle={handleToggleShuffle}
           onToggleLike={handleCurrentTrackToggleLike}
+          onDislike={handleDislike}
+          isDisliked={isCurrentTrackDisliked}
         />
         <footer className={styles.footer}></footer>
       </div>
